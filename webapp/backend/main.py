@@ -87,9 +87,15 @@ async def get_audio(name: str):
 async def realtime_start(sentence: str = Form(...), sample_rate: int = Form(16000)):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
-    sess = RealtimeSession(sentence, sample_rate)
+    filler_text = f"De zin was {sentence}"
+    filler_audio = tts_to_file(filler_text)
+    sess = RealtimeSession(sentence, sample_rate, filler_audio=filler_audio)
     sessions[sess.id] = sess
-    return {"session_id": sess.id}
+    return {
+        "session_id": sess.id,
+        "filler_audio": os.path.basename(filler_audio),
+        "delay_seconds": config.DELAY_SECONDS,
+    }
 
 
 @app.post("/api/realtime/chunk/{sid}")
@@ -110,12 +116,10 @@ async def realtime_stop(sid: str):
     results = sess.stop()
     _, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
-    filler_text = f"De zin was {sess.sentence}"
-    filler_audio = tts_to_file(filler_text)
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
     return JSONResponse({
         "feedback_text": tutor_resp.feedback_text,
-        "filler_audio": os.path.basename(filler_audio),
+        "filler_audio": os.path.basename(sess.filler_audio) if sess.filler_audio else None,
         "feedback_audio": os.path.basename(feedback_audio),
         "delay_seconds": config.DELAY_SECONDS,
     })
