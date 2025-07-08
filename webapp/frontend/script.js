@@ -12,6 +12,7 @@ let studentId = null;
 const statusEl = document.getElementById('status');
 const sentenceEl = document.getElementById('sentence');
 const feedbackEl = document.getElementById('feedback');
+const messageEl = document.getElementById('message');
 
 document.getElementById('init').onclick = async () => {
   statusEl.textContent = 'Loading models...';
@@ -30,6 +31,9 @@ document.getElementById('stu_login').onclick = async () => {
     teacherId = j.teacher_id;
     document.getElementById('student_ui').style.display = 'block';
     document.getElementById('teacher_ui').style.display = 'none';
+    messageEl.textContent = '';
+  } else {
+    messageEl.textContent = 'Student login failed';
   }
 };
 
@@ -38,7 +42,12 @@ document.getElementById('stu_register').onclick = async () => {
   fd.append('username', document.getElementById('stu_user').value);
   fd.append('password', document.getElementById('stu_pass').value);
   fd.append('teacher_id', document.getElementById('stu_teacher').value);
-  await fetch('/api/register_student', {method:'POST', body: fd});
+  const r = await fetch('/api/register_student', {method:'POST', body: fd});
+  if(r.ok){
+    messageEl.textContent = 'Student registered';
+  } else {
+    messageEl.textContent = 'Student registration failed';
+  }
 };
 
 document.getElementById('teach_login').onclick = async () => {
@@ -51,7 +60,12 @@ document.getElementById('teach_login').onclick = async () => {
     teacherId = j.teacher_id;
     document.getElementById('teacher_ui').style.display = 'block';
     document.getElementById('student_ui').style.display = 'none';
+    document.getElementById('teach_id_display').style.display = 'block';
+    document.getElementById('teach_id').textContent = teacherId;
+    messageEl.textContent = '';
     loadResults();
+  } else {
+    messageEl.textContent = 'Teacher login failed';
   }
 };
 
@@ -59,7 +73,16 @@ document.getElementById('teach_register').onclick = async () => {
   const fd = new FormData();
   fd.append('username', document.getElementById('teach_user').value);
   fd.append('password', document.getElementById('teach_pass').value);
-  await fetch('/api/register', {method:'POST', body: fd});
+  const r = await fetch('/api/register', {method:'POST', body: fd});
+  if(r.ok){
+    const j = await r.json();
+    teacherId = j.teacher_id;
+    document.getElementById('teach_id_display').style.display = 'block';
+    document.getElementById('teach_id').textContent = teacherId;
+    messageEl.textContent = 'Teacher registered';
+  } else {
+    messageEl.textContent = 'Teacher registration failed';
+  }
 };
 
 document.getElementById('next').onclick = async () => {
