@@ -4,20 +4,29 @@ let stream;
 let recording = false;
 let sentence = "";
 let sessionId = null;
-let fillerAudio = null;
 let delaySeconds = 0;
 let teacherId = null;
 let studentId = null;
+let studentName = null;
+let lastFeedbackAudio = null;
 
 const statusEl = document.getElementById('status');
 const sentenceEl = document.getElementById('sentence');
-const feedbackEl = document.getElementById('feedback');
+const feedbackModule = document.querySelector('.feedback');
+const emojiEl = feedbackModule.querySelector('.emoji');
+const textEl = feedbackModule.querySelector('.text');
+const replayBtn = feedbackModule.querySelector('.replay-btn');
+const progressBar = document.getElementById('progress_bar');
 
 const params = new URLSearchParams(window.location.search);
 studentId = params.get('student_id');
 teacherId = params.get('teacher_id');
+studentName = params.get('name');
 if(!studentId || !teacherId){
   window.location.href = '/';
+}
+if(studentName){
+  document.getElementById('student_name').textContent = studentName;
 }
 
 document.getElementById('init').onclick = async () => {
@@ -31,7 +40,8 @@ document.getElementById('next').onclick = async () => {
   const j = await r.json();
   sentence = j.sentence;
   sentenceEl.textContent = sentence;
-  feedbackEl.textContent = '';
+  feedbackModule.classList.remove('visible');
+  progressBar.style.width = ((j.index / j.total) * 100) + '%';
 };
 
 document.getElementById('record').onclick = async () => {
@@ -46,7 +56,6 @@ document.getElementById('record').onclick = async () => {
   const r = await fetch('/api/realtime/start', {method:'POST', body: fd});
   const j = await r.json();
   sessionId = j.session_id;
-  fillerAudio = j.filler_audio;
   delaySeconds = j.delay_seconds;
   const source = audioCtx.createMediaStreamSource(stream);
   processor = audioCtx.createScriptProcessor(4096,1,1);
@@ -77,20 +86,12 @@ document.getElementById('stop').onclick = async () => {
   document.getElementById('stop').disabled = true;
   statusEl.textContent = 'analysing';
 
-  const stopPromise = fetch('/api/realtime/stop/' + sessionId, { method: 'POST' })
+  const data = await fetch('/api/realtime/stop/' + sessionId, { method: 'POST' })
     .then(r => r.json());
   sessionId = null;
-
-  setTimeout(async () => {
-    statusEl.textContent = 'playing';
-    playAudio('/api/audio/' + fillerAudio, async () => {
-      const j = await stopPromise;
-      feedbackEl.textContent = j.feedback_text;
-      playAudio('/api/audio/' + j.feedback_audio, () => {
-        statusEl.textContent = '';
-      });
-    });
-  }, delaySeconds * 1000);
+  setTimeout(() => {
+    showFeedback(data);
+  }, data.delay_seconds * 1000);
 };
 
 function playAudio(url, cb){
@@ -98,3 +99,17 @@ function playAudio(url, cb){
   a.onended = cb;
   a.play();
 }
+
+function showFeedback(data){
+  emojiEl.textContent = data.emoji || '🎉';
+  textEl.textContent = data.feedback_text;
+  feedbackModule.classList.add('visible');
+  lastFeedbackAudio = data.feedback_audio;
+  playAudio('/api/audio/' + data.feedback_audio);
+}
+
+replayBtn.onclick = () => {
+  if(lastFeedbackAudio){
+    playAudio('/api/audio/' + lastFeedbackAudio);
+  }
+};

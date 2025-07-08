@@ -87,11 +87,16 @@ async def initialize_models():
 @app.get("/api/next_sentence")
 async def next_sentence():
     global sent_index
-    if sent_index >= len(config.SENTENCES):
+    total = len(config.SENTENCES)
+    if sent_index >= total:
         sent_index = 0
     sentence = config.SENTENCES[sent_index]
     sent_index += 1
-    return {"sentence": sentence}
+    return {
+        "sentence": sentence,
+        "index": sent_index,
+        "total": total,
+    }
 
 
 @app.get("/api/results/{teacher_id}")

@@ -2,31 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Leesmaatje Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600&family=Nunito+Sans:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/lucide-static@0.263.0/font/css/lucide.css">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <h1>Leesmaatje</h1>
-  <div id="message" style="color:red"></div>
+  <header class="logo">
+    <h1>Leesmaatje</h1>
+    <div class="mascot" aria-hidden="true">🦊</div>
+  </header>
 
-  <div id="login_tabs">
-    <button id="show_student" class="active">Student</button>
-    <button id="show_teacher">Teacher</button>
-  </div>
+  <div class="login-card">
+    <div id="login_tabs" class="tabs">
+      <button id="show_student" class="active">Student</button>
+      <button id="show_teacher">Teacher</button>
+    </div>
 
-  <div id="student_login" class="login-pane">
-    <input id="stu_user" placeholder="username">
-    <input id="stu_pass" type="password" placeholder="password">
-    <input id="stu_teacher" placeholder="teacher id for register">
-    <button id="stu_login">Login</button>
-    <button id="stu_register">Register</button>
-  </div>
+    <div id="student_login" class="login-pane">
+      <input id="stu_user" placeholder="Username">
+      <input id="stu_pass" type="password" placeholder="Password">
+      <input id="stu_teacher" placeholder="Class code">
+      <button id="stu_login" class="primary">Login</button>
+      <button id="stu_register" class="accent">Register</button>
+    </div>
 
-  <div id="teacher_login" class="login-pane" style="display:none">
-    <input id="teach_user" placeholder="username">
-    <input id="teach_pass" type="password" placeholder="password">
-    <button id="teach_login">Login</button>
-    <button id="teach_register">Register</button>
+    <div id="teacher_login" class="login-pane" style="display:none">
+      <input id="teach_user" placeholder="Username">
+      <input id="teach_pass" type="password" placeholder="Password">
+      <button id="teach_login" class="primary">Login</button>
+      <button id="teach_register" class="accent">Register</button>
+    </div>
+    <div id="message" class="error"></div>
   </div>
 
   <script src="/static/login.js"></script>
