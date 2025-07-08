@@ -2,19 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Leesmaatje Student</title>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600&family=Nunito+Sans:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/lucide-static@0.263.0/font/css/lucide.css">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <h1>Leesmaatje</h1>
+  <div class="top-bar">
+    <h1>Leesmaatje</h1>
+    <span id="student_name"></span>
+  </div>
   <div class="ui-pane">
-    <p id="sentence"></p>
-    <p id="feedback" class="feedback"></p>
+    <div id="sentence" class="card"></div>
+    <div class="progress"><div id="progress_bar" class="progress-bar"></div></div>
     <div id="status"></div>
     <button id="init">Initialize models</button>
     <button id="record">Record</button>
     <button id="stop" disabled>Stop</button>
     <button id="next">Next sentence</button>
+
+    <div class="feedback" aria-live="polite">
+      <span class="emoji" aria-hidden="true">🎉</span>
+      <p class="text">Great articulation! Keep it up.</p>
+      <button class="replay-btn" aria-label="Play feedback again">
+        <i class="lucide lucide-volume-2"></i>
+      </button>
+    </div>
   </div>
   <script src="/static/student.js"></script>
 </body>

@@ -25,7 +25,7 @@ document.getElementById('stu_login').onclick = async () => {
   const r = await fetch('/api/login_student', {method:'POST', body: fd});
   if(r.ok){
     const j = await r.json();
-    const params = new URLSearchParams({student_id: j.student_id, teacher_id: j.teacher_id});
+    const params = new URLSearchParams({student_id: j.student_id, teacher_id: j.teacher_id, name: document.getElementById('stu_user').value});
     window.location.href = '/static/student.html?' + params.toString();
   } else {
     messageEl.textContent = 'Student login failed';
