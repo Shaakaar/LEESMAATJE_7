@@ -58,21 +58,31 @@ document.getElementById('record').onclick = async () => {
 document.getElementById('stop').onclick = async () => {
   recording = false;
   processor.disconnect();
-  stream.getTracks().forEach(t=>t.stop());
+  stream.getTracks().forEach(t => t.stop());
   document.getElementById('stop').disabled = true;
   statusEl.textContent = 'analysing';
-  const r = await fetch('/api/realtime/stop/'+sessionId, {method:'POST'});
+
+  // Measure time from the moment the stop button was pressed so we can
+  // start playback relative to this moment even if the backend takes time
+  // to respond.
+  const startTime = Date.now();
+  const r = await fetch('/api/realtime/stop/' + sessionId, { method: 'POST' });
   sessionId = null;
   const j = await r.json();
   feedbackEl.textContent = j.feedback_text;
+
+  // Calculate remaining delay based on how long the request took.
+  const elapsed = Date.now() - startTime;
+  const remaining = Math.max(j.delay_seconds * 1000 - elapsed, 0);
+
   statusEl.textContent = 'playing';
-  setTimeout(()=>{
-    playAudio('/api/audio/'+j.filler_audio, ()=>{
-      playAudio('/api/audio/'+j.feedback_audio, ()=>{
-        statusEl.textContent='';
+  setTimeout(() => {
+    playAudio('/api/audio/' + j.filler_audio, () => {
+      playAudio('/api/audio/' + j.feedback_audio, () => {
+        statusEl.textContent = '';
       });
     });
-  }, j.delay_seconds*1000);
+  }, remaining);
 };
 
 function playAudio(url, cb){
