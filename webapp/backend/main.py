@@ -5,8 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import os
 import tempfile
+import shutil
+import sqlite3
+import json
 
-from . import config
+from . import config, storage
 from .analysis_pipeline import analyze_audio
 from .tts import tts_to_file
 from tutor import prompt_builder, gpt_client
@@ -15,6 +18,7 @@ from .realtime import RealtimeSession
 sessions: dict[str, RealtimeSession] = {}
 
 app = FastAPI()
+storage.init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +31,23 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__
 
 sent_index = 0
 models_ready = False
+
+
+@app.post("/api/register")
+async def register(username: str = Form(...), password: str = Form(...)):
+    try:
+        tid = storage.create_teacher(username, password)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="User exists")
+    return {"teacher_id": tid}
+
+
+@app.post("/api/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    tid = storage.authenticate(username, password)
+    if tid is None:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"teacher_id": tid}
 
 
 @app.get("/")
@@ -56,8 +77,22 @@ async def next_sentence():
     return {"sentence": sentence}
 
 
+@app.get("/api/results/{teacher_id}")
+async def get_results(teacher_id: int):
+    return storage.list_results(teacher_id)
+
+
+@app.get("/api/result/{res_id}")
+async def get_result(res_id: str):
+    r = storage.get_result(res_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Not found")
+    r["json_data"] = json.loads(r["json_data"])
+    return r
+
+
 @app.post("/api/process")
-async def process(sentence: str = Form(...), file: UploadFile = File(...)):
+async def process(sentence: str = Form(...), file: UploadFile = File(...), teacher_id: int = Form(1)):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
     wav_bytes = await file.read()
@@ -69,6 +104,10 @@ async def process(sentence: str = Form(...), file: UploadFile = File(...)):
     filler_audio = tts_to_file(filler_text)
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
 
+    dest_audio = storage.STORAGE_DIR / f"{results['session_id']}.wav"
+    shutil.move(results["audio_file"], dest_audio)
+    storage.save_result(teacher_id, results, str(dest_audio))
+
     return JSONResponse({
         "feedback_text": tutor_resp.feedback_text,
         "filler_audio": os.path.basename(filler_audio),
@@ -79,17 +118,22 @@ async def process(sentence: str = Form(...), file: UploadFile = File(...)):
 
 @app.get("/api/audio/{name}")
 async def get_audio(name: str):
-    path = os.path.join(tempfile.gettempdir(), name)
-    return FileResponse(path, media_type="audio/wav")
+    temp_path = os.path.join(tempfile.gettempdir(), name)
+    if os.path.exists(temp_path):
+        return FileResponse(temp_path, media_type="audio/wav")
+    stored = storage.STORAGE_DIR / name
+    if stored.exists():
+        return FileResponse(stored, media_type="audio/wav")
+    raise HTTPException(status_code=404, detail="Audio not found")
 
 
 @app.post("/api/realtime/start")
-async def realtime_start(sentence: str = Form(...), sample_rate: int = Form(16000)):
+async def realtime_start(sentence: str = Form(...), sample_rate: int = Form(16000), teacher_id: int = Form(1)):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
     filler_text = f"De zin was {sentence}"
     filler_audio = tts_to_file(filler_text)
-    sess = RealtimeSession(sentence, sample_rate, filler_audio=filler_audio)
+    sess = RealtimeSession(sentence, sample_rate, filler_audio=filler_audio, teacher_id=teacher_id)
     sessions[sess.id] = sess
     return {
         "session_id": sess.id,
@@ -117,6 +161,10 @@ async def realtime_stop(sid: str):
     _, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
+
+    dest_audio = storage.STORAGE_DIR / f"{results['session_id']}.wav"
+    shutil.move(results["audio_file"], dest_audio)
+    storage.save_result(sess.teacher_id, results, str(dest_audio))
     return JSONResponse({
         "feedback_text": tutor_resp.feedback_text,
         "filler_audio": os.path.basename(sess.filler_audio) if sess.filler_audio else None,
