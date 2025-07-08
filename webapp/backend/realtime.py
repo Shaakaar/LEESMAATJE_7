@@ -16,11 +16,12 @@ from . import config, analysis_pipeline
 class RealtimeSession:
     """Manage realtime audio analysis for one sentence."""
 
-    def __init__(self, sentence: str, sample_rate: int = 16000, *, filler_audio: str | None = None):
+    def __init__(self, sentence: str, sample_rate: int = 16000, *, filler_audio: str | None = None, teacher_id: int = 0):
         self.id = str(uuid.uuid4())
         self.sentence = sentence
         self.sample_rate = sample_rate
         self.filler_audio = filler_audio
+        self.teacher_id = teacher_id
         self.results: Dict[str, Any] = {
             "session_id": self.id,
             "reference_text": sentence,
