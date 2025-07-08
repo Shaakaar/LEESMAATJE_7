@@ -51,6 +51,12 @@ def init_db():
                 FOREIGN KEY (student_id) REFERENCES students(id)
             )"""
     )
+    # Simple schema migration for older databases without student_id column
+    cur.execute("PRAGMA table_info(results)")
+    columns = [row[1] for row in cur.fetchall()]
+    if "student_id" not in columns:
+        cur.execute("ALTER TABLE results ADD COLUMN student_id INTEGER")
+        conn.commit()
     conn.commit()
 
 
