@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,7 +54,7 @@ async def next_sentence():
 
 
 @app.post("/api/process")
-async def process(sentence: str, file: UploadFile = File(...)):
+async def process(sentence: str = Form(...), file: UploadFile = File(...)):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
     wav_bytes = await file.read()
