@@ -4,6 +4,7 @@ let stream;
 let recording = false;
 let sentence = "";
 let sessionId = null;
+let fillerAudio = null;
 let delaySeconds = 0;
 let teacherId = null;
 let studentId = null;
@@ -56,6 +57,7 @@ document.getElementById('record').onclick = async () => {
   const r = await fetch('/api/realtime/start', {method:'POST', body: fd});
   const j = await r.json();
   sessionId = j.session_id;
+  fillerAudio = j.filler_audio;
   delaySeconds = j.delay_seconds;
   const source = audioCtx.createMediaStreamSource(stream);
   processor = audioCtx.createScriptProcessor(4096,1,1);
@@ -86,12 +88,17 @@ document.getElementById('stop').onclick = async () => {
   document.getElementById('stop').disabled = true;
   statusEl.textContent = 'analysing';
 
-  const data = await fetch('/api/realtime/stop/' + sessionId, { method: 'POST' })
+  const stopPromise = fetch('/api/realtime/stop/' + sessionId, { method: 'POST' })
     .then(r => r.json());
   sessionId = null;
-  setTimeout(() => {
-    showFeedback(data);
-  }, data.delay_seconds * 1000);
+  setTimeout(async () => {
+    statusEl.textContent = 'playing';
+    playAudio('/api/audio/' + fillerAudio, async () => {
+      const data = await stopPromise;
+      showFeedback(data);
+      statusEl.textContent = '';
+    });
+  }, delaySeconds * 1000);
 };
 
 function playAudio(url, cb){
