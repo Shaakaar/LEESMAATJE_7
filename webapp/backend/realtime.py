@@ -42,21 +42,41 @@ class RealtimeSession:
         self.wavefile.setsampwidth(2)
         self.wavefile.setframerate(self.sample_rate)
 
-        # Start realtime wav2vec2 engines
+        rt = config.REALTIME_FLAGS
+
+        # Start wav2vec2 engines
         self.phon_thread = Wav2Vec2PhonemeExtractor(
             sample_rate=self.sample_rate,
             chunk_duration=config.CHUNK_DURATION,
             results=self.results,
-            realtime=True,
+            realtime=rt.get("w2v2_phonemes", True),
         )
         self.asr_thread = Wav2Vec2Transcriber(
             sample_rate=self.sample_rate,
             chunk_duration=config.CHUNK_DURATION,
             results=self.results,
-            realtime=True,
+            realtime=rt.get("w2v2_asr", True),
         )
-        self.phon_thread.start()
-        self.asr_thread.start()
+
+        # Azure engines
+        self.azure_pron = AzurePronunciationEvaluator(
+            self.sentence,
+            results=self.results,
+            realtime=rt.get("azure_pron", True),
+        )
+        self.azure_plain = AzurePlainTranscriber(
+            results=self.results,
+            realtime=rt.get("azure_plain", True),
+        )
+
+        if self.phon_thread.realtime:
+            self.phon_thread.start()
+        if self.asr_thread.realtime:
+            self.asr_thread.start()
+        if self.azure_pron.realtime:
+            self.azure_pron.start()
+        if self.azure_plain.realtime:
+            self.azure_plain.start()
 
     def add_chunk(self, pcm_data: bytes):
         """Add a chunk of 16‑bit mono PCM data."""
@@ -67,17 +87,29 @@ class RealtimeSession:
     def stop(self) -> Dict[str, Any]:
         """Finalize processing and return results."""
         audio_q.put(None)
-        self.phon_thread.stop()
-        self.asr_thread.stop()
-        self.phon_thread.join()
-        self.asr_thread.join()
-        self.wavefile.close()
+        if self.phon_thread.realtime:
+            self.phon_thread.stop()
+            self.phon_thread.join()
+        else:
+            self.phon_thread.process_file(self.wav_path)
 
-        # Run Azure engines offline on the saved WAV
-        ap = AzurePronunciationEvaluator(self.sentence, results=self.results, realtime=False)
-        ap.process_file(self.wav_path)
-        at = AzurePlainTranscriber(results=self.results, realtime=False)
-        at.process_file(self.wav_path)
+        if self.asr_thread.realtime:
+            self.asr_thread.stop()
+            self.asr_thread.join()
+        else:
+            self.asr_thread.process_file(self.wav_path)
+
+        if self.azure_pron.realtime:
+            self.azure_pron.stop()
+        else:
+            self.azure_pron.process_file(self.wav_path)
+
+        if self.azure_plain.realtime:
+            self.azure_plain.stop()
+        else:
+            self.azure_plain.process_file(self.wav_path)
+
+        self.wavefile.close()
 
         self.results["end_time"] = time.time()
         return self.results
