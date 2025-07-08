@@ -4,6 +4,8 @@ let stream;
 let recording = false;
 let sentence = "";
 let sessionId = null;
+let fillerAudio = null;
+let delaySeconds = 0;
 
 const statusEl = document.getElementById('status');
 const sentenceEl = document.getElementById('sentence');
@@ -33,6 +35,8 @@ document.getElementById('record').onclick = async () => {
   const r = await fetch('/api/realtime/start', {method:'POST', body: fd});
   const j = await r.json();
   sessionId = j.session_id;
+  fillerAudio = j.filler_audio;
+  delaySeconds = j.delay_seconds;
   const source = audioCtx.createMediaStreamSource(stream);
   processor = audioCtx.createScriptProcessor(4096,1,1);
   source.connect(processor);
@@ -62,27 +66,20 @@ document.getElementById('stop').onclick = async () => {
   document.getElementById('stop').disabled = true;
   statusEl.textContent = 'analysing';
 
-  // Measure time from the moment the stop button was pressed so we can
-  // start playback relative to this moment even if the backend takes time
-  // to respond.
-  const startTime = Date.now();
-  const r = await fetch('/api/realtime/stop/' + sessionId, { method: 'POST' });
+  const stopPromise = fetch('/api/realtime/stop/' + sessionId, { method: 'POST' })
+    .then(r => r.json());
   sessionId = null;
-  const j = await r.json();
-  feedbackEl.textContent = j.feedback_text;
 
-  // Calculate remaining delay based on how long the request took.
-  const elapsed = Date.now() - startTime;
-  const remaining = Math.max(j.delay_seconds * 1000 - elapsed, 0);
-
-  statusEl.textContent = 'playing';
-  setTimeout(() => {
-    playAudio('/api/audio/' + j.filler_audio, () => {
+  setTimeout(async () => {
+    statusEl.textContent = 'playing';
+    playAudio('/api/audio/' + fillerAudio, async () => {
+      const j = await stopPromise;
+      feedbackEl.textContent = j.feedback_text;
       playAudio('/api/audio/' + j.feedback_audio, () => {
         statusEl.textContent = '';
       });
     });
-  }, remaining);
+  }, delaySeconds * 1000);
 };
 
 function playAudio(url, cb){
