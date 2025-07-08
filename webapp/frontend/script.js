@@ -1,9 +1,9 @@
 let audioCtx;
 let processor;
 let stream;
-let chunks = [];
 let recording = false;
 let sentence = "";
+let sessionId = null;
 
 const statusEl = document.getElementById('status');
 const sentenceEl = document.getElementById('sentence');
@@ -25,9 +25,14 @@ document.getElementById('next').onclick = async () => {
 
 document.getElementById('record').onclick = async () => {
   if (!sentence) return;
-  chunks = [];
   stream = await navigator.mediaDevices.getUserMedia({audio:true});
   audioCtx = new AudioContext();
+  const fd = new FormData();
+  fd.append('sentence', sentence);
+  fd.append('sample_rate', audioCtx.sampleRate);
+  const r = await fetch('/api/realtime/start', {method:'POST', body: fd});
+  const j = await r.json();
+  sessionId = j.session_id;
   const source = audioCtx.createMediaStreamSource(stream);
   processor = audioCtx.createScriptProcessor(4096,1,1);
   source.connect(processor);
@@ -35,7 +40,15 @@ document.getElementById('record').onclick = async () => {
   processor.onaudioprocess = e => {
     if(!recording) return;
     const buf = e.inputBuffer.getChannelData(0);
-    chunks.push(new Float32Array(buf));
+    const pcm = new Int16Array(buf.length);
+    for(let i=0;i<buf.length;i++){
+      let s = Math.max(-1, Math.min(1, buf[i]));
+      pcm[i] = s*32767;
+    }
+    const blob = new Blob([pcm], {type:'application/octet-stream'});
+    const f = new FormData();
+    f.append('file', blob, 'chunk.pcm');
+    fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
   };
   recording = true;
   document.getElementById('stop').disabled = false;
@@ -46,13 +59,10 @@ document.getElementById('stop').onclick = async () => {
   recording = false;
   processor.disconnect();
   stream.getTracks().forEach(t=>t.stop());
-  const blob = exportWav(chunks, audioCtx.sampleRate);
   document.getElementById('stop').disabled = true;
   statusEl.textContent = 'analysing';
-  const fd = new FormData();
-  fd.append('sentence', sentence);
-  fd.append('file', blob, 'rec.wav');
-  const r = await fetch('/api/process', {method:'POST', body:fd});
+  const r = await fetch('/api/realtime/stop/'+sessionId, {method:'POST'});
+  sessionId = null;
   const j = await r.json();
   feedbackEl.textContent = j.feedback_text;
   statusEl.textContent = 'playing';
@@ -71,43 +81,3 @@ function playAudio(url, cb){
   a.play();
 }
 
-function exportWav(buffers, sampleRate){
-  let length = 0;
-  buffers.forEach(b=> length += b.length);
-  const pcm = new Int16Array(length);
-  let offset = 0;
-  buffers.forEach(b=>{
-    for(let i=0;i<b.length;i++){
-      let s = Math.max(-1, Math.min(1, b[i]));
-      pcm[offset++] = s*32767;
-    }
-  });
-  const wav = encodeWav(pcm, sampleRate);
-  return new Blob([wav], {type:'audio/wav'});
-}
-
-function encodeWav(samples, sampleRate){
-  const buffer = new ArrayBuffer(44 + samples.length*2);
-  const view = new DataView(buffer);
-  function writeString(view, offset, string){
-    for(let i=0;i<string.length;i++) view.setUint8(offset+i, string.charCodeAt(i));
-  }
-  let offset = 0;
-  writeString(view, offset, 'RIFF'); offset+=4;
-  view.setUint32(offset, 36 + samples.length*2, true); offset+=4;
-  writeString(view, offset, 'WAVE'); offset+=4;
-  writeString(view, offset, 'fmt '); offset+=4;
-  view.setUint32(offset, 16, true); offset+=4;
-  view.setUint16(offset, 1, true); offset+=2;
-  view.setUint16(offset, 1, true); offset+=2;
-  view.setUint32(offset, sampleRate, true); offset+=4;
-  view.setUint32(offset, sampleRate*2, true); offset+=4;
-  view.setUint16(offset, 2, true); offset+=2;
-  view.setUint16(offset, 16, true); offset+=2;
-  writeString(view, offset, 'data'); offset+=4;
-  view.setUint32(offset, samples.length*2, true); offset+=4;
-  for(let i=0;i<samples.length;i++, offset+=2){
-    view.setInt16(offset, samples[i], true);
-  }
-  return view;
-}
