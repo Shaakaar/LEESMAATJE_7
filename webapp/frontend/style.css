@@ -1,6 +1,59 @@
-body { font-family: sans-serif; margin: 2em; }
-button { margin-right: 0.5em; }
-#status { margin-top: 1em; font-weight: bold; }
-#login_tabs { margin-bottom: 1em; }
-#login_tabs button.active { font-weight: bold; }
-.login-pane { margin-bottom: 1em; }
+body {
+  font-family: "Comic Sans MS", "Comic Neue", cursive, sans-serif;
+  background-color: #f0f8ff;
+  text-align: center;
+  padding: 2em;
+}
+
+h1 {
+  color: #0066cc;
+  margin-bottom: 1em;
+}
+
+.login-pane, .ui-pane {
+  background: #fff;
+  padding: 1em;
+  margin: 0 auto;
+  max-width: 400px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+input {
+  width: 90%;
+  padding: 0.5em;
+  margin: 0.3em 0;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+button {
+  background-color: #0099ff;
+  color: white;
+  border: none;
+  padding: 0.5em 1em;
+  margin: 0.3em;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #007acc;
+}
+
+#status {
+  margin-top: 1em;
+  font-weight: bold;
+}
+
+#login_tabs {
+  margin-bottom: 1em;
+}
+
+#login_tabs button.active {
+  font-weight: bold;
+}
+
+.feedback {
+  white-space: pre-wrap;
+}
