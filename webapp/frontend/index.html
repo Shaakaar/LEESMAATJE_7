@@ -7,13 +7,34 @@
 </head>
 <body>
 <h1>Tutor Demo</h1>
-<p id="sentence"></p>
-<p id="feedback" style="white-space:pre-wrap"></p>
-<div id="status"></div>
-<button id="init">Initialize models</button>
-<button id="record">Record</button>
-<button id="stop" disabled>Stop</button>
-<button id="next">Next sentence</button>
+
+<h2>Student Login</h2>
+<input id="stu_user" placeholder="username">
+<input id="stu_pass" type="password" placeholder="password">
+<input id="stu_teacher" placeholder="teacher id for register" style="display:none">
+<button id="stu_login">Login</button>
+<button id="stu_register">Register</button>
+
+<h2>Teacher Login</h2>
+<input id="teach_user" placeholder="username">
+<input id="teach_pass" type="password" placeholder="password">
+<button id="teach_login">Login</button>
+<button id="teach_register">Register</button>
+
+<div id="student_ui" style="display:none">
+  <p id="sentence"></p>
+  <p id="feedback" style="white-space:pre-wrap"></p>
+  <div id="status"></div>
+  <button id="init">Initialize models</button>
+  <button id="record">Record</button>
+  <button id="stop" disabled>Stop</button>
+  <button id="next">Next sentence</button>
+</div>
+
+<div id="teacher_ui" style="display:none">
+  <h2>Results</h2>
+  <ul id="results"></ul>
+</div>
 <script src="/static/script.js"></script>
 </body>
 </html>
