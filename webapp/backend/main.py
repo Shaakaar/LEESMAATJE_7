@@ -10,6 +10,9 @@ from . import config
 from .analysis_pipeline import analyze_audio
 from .tts import tts_to_file
 from tutor import prompt_builder, gpt_client
+from .realtime import RealtimeSession
+
+sessions: dict[str, RealtimeSession] = {}
 
 app = FastAPI()
 
@@ -78,3 +81,41 @@ async def process(sentence: str = Form(...), file: UploadFile = File(...)):
 async def get_audio(name: str):
     path = os.path.join(tempfile.gettempdir(), name)
     return FileResponse(path, media_type="audio/wav")
+
+
+@app.post("/api/realtime/start")
+async def realtime_start(sentence: str = Form(...), sample_rate: int = Form(16000)):
+    if not models_ready:
+        raise HTTPException(status_code=400, detail="Models not initialized")
+    sess = RealtimeSession(sentence, sample_rate)
+    sessions[sess.id] = sess
+    return {"session_id": sess.id}
+
+
+@app.post("/api/realtime/chunk/{sid}")
+async def realtime_chunk(sid: str, file: UploadFile = File(...)):
+    sess = sessions.get(sid)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Unknown session")
+    data = await file.read()
+    sess.add_chunk(data)
+    return {"status": "ok"}
+
+
+@app.post("/api/realtime/stop/{sid}")
+async def realtime_stop(sid: str):
+    sess = sessions.pop(sid, None)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Unknown session")
+    results = sess.stop()
+    _, messages = prompt_builder.build(results, state={})
+    tutor_resp = await gpt_client.chat(messages)
+    filler_text = f"De zin was {sess.sentence}"
+    filler_audio = tts_to_file(filler_text)
+    feedback_audio = tts_to_file(tutor_resp.feedback_text)
+    return JSONResponse({
+        "feedback_text": tutor_resp.feedback_text,
+        "filler_audio": os.path.basename(filler_audio),
+        "feedback_audio": os.path.basename(feedback_audio),
+        "delay_seconds": config.DELAY_SECONDS,
+    })
