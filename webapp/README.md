@@ -13,7 +13,11 @@ returns GPT feedback.
 
 ```bash
 cd webapp/backend
-uvicorn main:app --reload
+python -m uvicorn main:app --reload --no-access-log
 ```
 
 Then open `http://localhost:8000` in a browser.
+
+Set the realtime behaviour of each engine in `backend/config.py` via
+`REALTIME_FLAGS`. When Azure engines run in realtime their interim results will
+be printed to the console, just like in `tutor_loop.py`.
