@@ -13,6 +13,24 @@ const statusEl = document.getElementById('status');
 const sentenceEl = document.getElementById('sentence');
 const feedbackEl = document.getElementById('feedback');
 const messageEl = document.getElementById('message');
+const studentLoginPane = document.getElementById('student_login');
+const teacherLoginPane = document.getElementById('teacher_login');
+const showStudentBtn = document.getElementById('show_student');
+const showTeacherBtn = document.getElementById('show_teacher');
+
+showStudentBtn.onclick = () => {
+  studentLoginPane.style.display = 'block';
+  teacherLoginPane.style.display = 'none';
+  showStudentBtn.classList.add('active');
+  showTeacherBtn.classList.remove('active');
+};
+
+showTeacherBtn.onclick = () => {
+  studentLoginPane.style.display = 'none';
+  teacherLoginPane.style.display = 'block';
+  showTeacherBtn.classList.add('active');
+  showStudentBtn.classList.remove('active');
+};
 
 document.getElementById('init').onclick = async () => {
   statusEl.textContent = 'Loading models...';

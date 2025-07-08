@@ -9,19 +9,28 @@
 <h1>Tutor Demo</h1>
 <div id="message" style="color:red"></div>
 
-<h2>Student Login</h2>
-<input id="stu_user" placeholder="username">
-<input id="stu_pass" type="password" placeholder="password">
-<input id="stu_teacher" placeholder="teacher id for register">
-<button id="stu_login">Login</button>
-<button id="stu_register">Register</button>
+<div id="login_tabs">
+  <button id="show_student" class="active">Login as Student</button>
+  <button id="show_teacher">Login as Teacher</button>
+</div>
 
-<h2>Teacher Login</h2>
-<input id="teach_user" placeholder="username">
-<input id="teach_pass" type="password" placeholder="password">
-<button id="teach_login">Login</button>
-<button id="teach_register">Register</button>
-<div id="teach_id_display" style="display:none">Teacher ID: <span id="teach_id"></span></div>
+<div id="student_login" class="login-pane">
+  <h2>Student Login</h2>
+  <input id="stu_user" placeholder="username">
+  <input id="stu_pass" type="password" placeholder="password">
+  <input id="stu_teacher" placeholder="teacher id for register">
+  <button id="stu_login">Login</button>
+  <button id="stu_register">Register</button>
+</div>
+
+<div id="teacher_login" class="login-pane" style="display:none">
+  <h2>Teacher Login</h2>
+  <input id="teach_user" placeholder="username">
+  <input id="teach_pass" type="password" placeholder="password">
+  <button id="teach_login">Login</button>
+  <button id="teach_register">Register</button>
+  <div id="teach_id_display" style="display:none">Teacher ID: <span id="teach_id"></span></div>
+</div>
 
 <div id="student_ui" style="display:none">
   <p id="sentence"></p>
