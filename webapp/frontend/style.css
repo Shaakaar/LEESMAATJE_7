@@ -1,6 +1,6 @@
 :root {
   --primary:#4F8CFF;
-  --accent:#FFC75F;
+  --accent:#55C2A7;
   --bg:#F3FAFF;
   --text:#022B3A;
 }
@@ -97,7 +97,7 @@ button.accent {
 .feedback {
   display:flex;
   align-items:center;
-  justify-content:center;
+  justify-content:space-between;
   gap:0.5rem;
   margin-top:1rem;
   background:#fff;
@@ -110,8 +110,11 @@ button.accent {
 .feedback.visible {
   opacity:1;
 }
-.feedback .emoji {
-  font-size:2rem;
+.feedback.positive {
+  background:#d4edda;
+}
+.feedback.negative {
+  background:#f8d7da;
 }
 .feedback .replay-btn {
   background:var(--primary);

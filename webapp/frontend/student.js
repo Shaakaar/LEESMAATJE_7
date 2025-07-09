@@ -14,7 +14,6 @@ let lastFeedbackAudio = null;
 const statusEl = document.getElementById('status');
 const sentenceEl = document.getElementById('sentence');
 const feedbackModule = document.querySelector('.feedback');
-const emojiEl = feedbackModule.querySelector('.emoji');
 const textEl = feedbackModule.querySelector('.text');
 const replayBtn = feedbackModule.querySelector('.replay-btn');
 const progressBar = document.getElementById('progress_bar');
@@ -108,9 +107,11 @@ function playAudio(url, cb){
 }
 
 function showFeedback(data){
-  emojiEl.textContent = data.emoji || '🎉';
   textEl.textContent = data.feedback_text;
   feedbackModule.classList.add('visible');
+  const negative = /opnieuw|niet gehoord|again|wrong/i.test(data.feedback_text);
+  feedbackModule.classList.toggle('negative', negative);
+  feedbackModule.classList.toggle('positive', !negative);
   lastFeedbackAudio = data.feedback_audio;
   playAudio('/api/audio/' + data.feedback_audio);
 }
