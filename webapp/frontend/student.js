@@ -20,10 +20,13 @@ const progressBar = document.getElementById('progress_bar');
 
 const params = new URLSearchParams(window.location.search);
 studentId = params.get('student_id');
-teacherId = params.get('teacher_id');
+teacherId = parseInt(params.get('teacher_id'), 10);
 studentName = params.get('name');
-if(!studentId || !teacherId){
+if(!studentId){
   window.location.href = '/';
+}
+if(isNaN(teacherId)){
+  teacherId = 0;
 }
 if(studentName){
   document.getElementById('student_name').textContent = studentName;

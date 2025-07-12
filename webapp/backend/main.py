@@ -51,7 +51,13 @@ async def login(username: str = Form(...), password: str = Form(...)):
 
 
 @app.post("/api/register_student")
-async def register_student(username: str = Form(...), password: str = Form(...), teacher_id: int = Form(...)):
+async def register_student(
+    username: str = Form(...),
+    password: str = Form(...),
+    teacher_id: int | None = Form(None),
+):
+    if teacher_id is not None and not storage.teacher_exists(teacher_id):
+        raise HTTPException(status_code=400, detail="Class code not found")
     try:
         sid = storage.create_student(username, password, teacher_id)
     except sqlite3.IntegrityError:
@@ -60,10 +66,19 @@ async def register_student(username: str = Form(...), password: str = Form(...),
 
 
 @app.post("/api/login_student")
-async def login_student(username: str = Form(...), password: str = Form(...)):
+async def login_student(
+    username: str = Form(...),
+    password: str = Form(...),
+    teacher_id: int | None = Form(None),
+):
     sid, tid = storage.authenticate_student(username, password)
     if sid is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    if teacher_id is not None:
+        if not storage.teacher_exists(teacher_id):
+            raise HTTPException(status_code=400, detail="Class code not found")
+        if tid != teacher_id:
+            raise HTTPException(status_code=401, detail="Invalid class code")
     return {"student_id": sid, "teacher_id": tid}
 
 

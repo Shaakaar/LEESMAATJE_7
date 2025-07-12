@@ -76,7 +76,14 @@ def authenticate_teacher(username: str, password: str):
     return row["id"] if row else None
 
 
-def create_student(username: str, password: str, teacher_id: int):
+def teacher_exists(teacher_id: int) -> bool:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT 1 FROM teachers WHERE id=?", (teacher_id,))
+    return cur.fetchone() is not None
+
+
+def create_student(username: str, password: str, teacher_id: int | None):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
