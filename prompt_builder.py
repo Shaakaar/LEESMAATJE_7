@@ -14,7 +14,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
-from tutor.tutor_schema import TutorRequest
+# `tutor_schema.py` lives in the repository root. Import it directly so the
+# application does not depend on a `tutor` package being installed.
+from tutor_schema import TutorRequest
 
 
 def _load_system_prompt(path: str | Path) -> str:
