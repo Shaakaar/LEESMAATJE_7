@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Leesmaatje Teacher</title>
+  <title>Student Results</title>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600&family=Nunito+Sans:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/lucide-static@0.263.0/font/css/lucide.css">
   <link rel="stylesheet" href="/static/style.css">
@@ -11,18 +11,13 @@
 <body>
   <div class="top-bar">
     <h1>Leesmaatje</h1>
-    <span id="class_code"></span>
+    <span id="student_name_bar"></span>
     <button id="logout" class="accent">Log out</button>
   </div>
   <div class="ui-pane">
-    <h2>Class Results</h2>
-    <table id="students" class="results-table">
-      <thead>
-        <tr><th>Name</th><th>Last session</th><th>Minutes (7d)</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <h2>Practice Results</h2>
+    <ul id="results" class="results-list"></ul>
   </div>
-  <script src="/static/teacher.js"></script>
+  <script src="/static/student_results.js"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import json
+import time
 from pathlib import Path
 
 STORAGE_DIR = Path(os.path.dirname(__file__)) / "storage"
@@ -138,13 +139,59 @@ def list_results(teacher_id: int):
 
 
 def list_student_results(student_id: int):
+    """Return all results for a student including stored JSON data and audio path."""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, sentence, timestamp FROM results WHERE student_id=? ORDER BY timestamp DESC",
+        "SELECT id, sentence, timestamp, audio_path, json_data FROM results WHERE student_id=? ORDER BY timestamp DESC",
         (student_id,),
     )
-    return [dict(r) for r in cur.fetchall()]
+    rows = []
+    for r in cur.fetchall():
+        row = dict(r)
+        try:
+            row["json_data"] = json.loads(row["json_data"])
+        except Exception:
+            row["json_data"] = {}
+        rows.append(row)
+    return rows
+
+
+def list_student_summaries(teacher_id: int):
+    """Return per-student summary stats for a teacher."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, username FROM students WHERE teacher_id=?",
+        (teacher_id,),
+    )
+    students = [dict(r) for r in cur.fetchall()]
+
+    one_week_ago = time.time() - 7 * 24 * 3600
+    for stu in students:
+        sid = stu["id"]
+        cur.execute(
+            "SELECT timestamp, json_data FROM results WHERE student_id=? ORDER BY timestamp DESC LIMIT 1",
+            (sid,),
+        )
+        row = cur.fetchone()
+        stu["last_session"] = row["timestamp"] if row else None
+
+        cur.execute(
+            "SELECT json_data FROM results WHERE student_id=? AND timestamp>=?",
+            (sid, one_week_ago),
+        )
+        total_seconds = 0.0
+        for r in cur.fetchall():
+            try:
+                j = json.loads(r["json_data"])
+                start = j.get("start_time") or 0
+                end = j.get("end_time") or start
+                total_seconds += max(0, end - start)
+            except Exception:
+                continue
+        stu["minutes_7d"] = round(total_seconds / 60, 1)
+    return students
 
 
 def get_result(result_id: str):

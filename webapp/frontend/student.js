@@ -129,3 +129,7 @@ replayBtn.onclick = () => {
     playAudio('/api/audio/' + lastFeedbackAudio);
   }
 };
+
+document.getElementById('logout').onclick = () => {
+  window.location.href = '/';
+};
