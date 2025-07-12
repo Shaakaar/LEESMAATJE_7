@@ -112,7 +112,12 @@ function playAudio(url, cb){
 function showFeedback(data){
   textEl.textContent = data.feedback_text;
   feedbackModule.classList.add('visible');
-  const negative = /opnieuw|niet gehoord|again|wrong/i.test(data.feedback_text);
+  let negative;
+  if(typeof data.correct === 'boolean'){
+    negative = !data.correct;
+  } else {
+    negative = /opnieuw|niet gehoord|again|wrong/i.test(data.feedback_text);
+  }
   feedbackModule.classList.toggle('negative', negative);
   feedbackModule.classList.toggle('positive', !negative);
   lastFeedbackAudio = data.feedback_audio;
