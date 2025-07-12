@@ -1,18 +1,20 @@
 const params = new URLSearchParams(window.location.search);
-const teacherId = params.get('teacher_id');
-if(!teacherId){
+const teacherId = parseInt(params.get('teacher_id'), 10);
+if (isNaN(teacherId)) {
   window.location.href = '/';
 }
 
 document.getElementById('class_code').textContent = 'Class ' + teacherId;
 
 document.getElementById('logout').onclick = () => {
-  window.location.href = '/';
+  window.location.assign('/');
 };
 
-async function loadStudents(){
-  const r = await fetch('/api/student_summaries/' + teacherId);
-  const list = await r.json();
+async function loadStudents() {
+  try {
+    const r = await fetch('/api/student_summaries/' + teacherId);
+    if (!r.ok) throw new Error('Request failed');
+    const list = await r.json();
   const tbody = document.querySelector('#students tbody');
   tbody.innerHTML = '';
   list.forEach(stu => {
@@ -32,6 +34,9 @@ async function loadStudents(){
     tr.appendChild(tdMinutes);
     tbody.appendChild(tr);
   });
+  } catch (err) {
+    console.error('Failed to load students', err);
+  }
 }
 
 loadStudents();
