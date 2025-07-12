@@ -47,6 +47,11 @@ h1,h2,h3 {
   color:var(--text);
 }
 
+.toggle-btn.active {
+  background:var(--accent);
+  color:var(--text);
+}
+
 .card {
   background:#fff;
   font-size:3rem;
