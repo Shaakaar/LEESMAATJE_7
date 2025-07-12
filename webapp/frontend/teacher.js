@@ -24,7 +24,7 @@ async function loadStudents(){
     link.href = '/static/student_results.html?' + params.toString();
     tdName.appendChild(link);
     const tdLast = document.createElement('td');
-    tdLast.textContent = stu.last_session ? new Date(stu.last_session * 1000).toLocaleString() : '-';
+    tdLast.textContent = stu.last_sentence ? new Date(stu.last_sentence * 1000).toLocaleString() : '-';
     const tdMinutes = document.createElement('td');
     tdMinutes.textContent = stu.minutes_7d.toFixed(1);
     tr.appendChild(tdName);
