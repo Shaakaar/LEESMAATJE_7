@@ -10,12 +10,22 @@ import sqlite3
 import json
 
 from . import config, storage
-from .analysis_pipeline import analyze_audio
-from .tts import tts_to_file
-from tutor import prompt_builder, gpt_client
-from .realtime import RealtimeSession
+# Heavy dependencies such as the analysis pipeline, text to speech and
+# realtime processing pull in a number of third party libraries.  Importing
+# them at module import time means the whole application fails to start when
+# those libraries are missing (for example in development or testing
+# environments).  To ensure that lightweight endpoints like the login API work
+# without requiring the full stack, these modules are imported lazily within the
+# endpoints that actually need them.
 
-sessions: dict[str, RealtimeSession] = {}
+# Import helper modules from the repository root
+import prompt_builder
+import gpt_client
+
+# `sessions` will map realtime session ids to RealtimeSession objects.  The
+# class itself is imported lazily in `realtime_start` to avoid importing heavy
+# dependencies when they are not installed.
+sessions: dict[str, "RealtimeSession"] = {}
 
 app = FastAPI()
 storage.init_db()
@@ -138,6 +148,11 @@ async def process(sentence: str = Form(...), file: UploadFile = File(...), teach
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
     wav_bytes = await file.read()
+    # Import heavy modules lazily to avoid requiring them when only the
+    # authentication endpoints are used.
+    from .analysis_pipeline import analyze_audio
+    from .tts import tts_to_file
+
     results = analyze_audio(wav_bytes, sentence)
     _, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
@@ -173,9 +188,14 @@ async def get_audio(name: str):
 async def realtime_start(sentence: str = Form(...), sample_rate: int = Form(16000), teacher_id: int = Form(1), student_id: int = Form(0)):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
+    # Import heavy modules lazily
+    from .realtime import RealtimeSession
+    from .tts import tts_to_file
+
     filler_text = f"De zin was {sentence}"
     filler_audio = tts_to_file(filler_text)
-    sess = RealtimeSession(sentence, sample_rate, filler_audio=filler_audio, teacher_id=teacher_id, student_id=student_id)
+    sess = RealtimeSession(sentence, sample_rate, filler_audio=filler_audio,
+                           teacher_id=teacher_id, student_id=student_id)
     sessions[sess.id] = sess
     return {
         "session_id": sess.id,
@@ -202,6 +222,7 @@ async def realtime_stop(sid: str):
     results = sess.stop()
     _, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
+    from .tts import tts_to_file
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
 
     dest_audio = storage.STORAGE_DIR / f"{results['session_id']}.wav"

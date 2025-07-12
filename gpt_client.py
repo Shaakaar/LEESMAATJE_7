@@ -16,7 +16,9 @@ import os
 from typing import List, Dict, Any
 
 import httpx
-from tutor.tutor_schema import TutorResponse
+# `tutor_schema.py` lives in the repository root. Import it directly so the
+# application does not depend on a `tutor` package being installed.
+from tutor_schema import TutorResponse
 from dotenv import load_dotenv
 load_dotenv()
 
