@@ -4,24 +4,34 @@ if(!teacherId){
   window.location.href = '/';
 }
 
-async function loadResults(){
-  const r = await fetch('/api/results/' + teacherId);
+document.getElementById('class_code').textContent = 'Class ' + teacherId;
+
+document.getElementById('logout').onclick = () => {
+  window.location.href = '/';
+};
+
+async function loadStudents(){
+  const r = await fetch('/api/student_summaries/' + teacherId);
   const list = await r.json();
-  const ul = document.getElementById('results');
-  ul.innerHTML = '';
-  list.forEach(res => {
-    const li = document.createElement('li');
-    li.textContent = res.timestamp + ' - ' + res.student + ': ' + res.sentence;
-    li.onclick = async () => {
-      const rr = await fetch('/api/result/' + res.id);
-      const j = await rr.json();
-      const audio = document.createElement('audio');
-      audio.controls = true;
-      audio.src = '/api/audio/' + j.audio_path.split('/').pop();
-      li.appendChild(audio);
-    };
-    ul.appendChild(li);
+  const tbody = document.querySelector('#students tbody');
+  tbody.innerHTML = '';
+  list.forEach(stu => {
+    const tr = document.createElement('tr');
+    const tdName = document.createElement('td');
+    const link = document.createElement('a');
+    link.textContent = stu.username;
+    const params = new URLSearchParams({student_id: stu.id, teacher_id: teacherId, name: stu.username});
+    link.href = '/static/student_results.html?' + params.toString();
+    tdName.appendChild(link);
+    const tdLast = document.createElement('td');
+    tdLast.textContent = stu.last_session ? new Date(stu.last_session * 1000).toLocaleString() : '-';
+    const tdMinutes = document.createElement('td');
+    tdMinutes.textContent = stu.minutes_7d.toFixed(1);
+    tr.appendChild(tdName);
+    tr.appendChild(tdLast);
+    tr.appendChild(tdMinutes);
+    tbody.appendChild(tr);
   });
 }
 
-loadResults();
+loadStudents();

@@ -149,3 +149,42 @@ button.accent {
   width:0%;
   transition:width .3s;
 }
+
+.results-table {
+  width:100%;
+  border-collapse:collapse;
+  margin-top:1rem;
+}
+.results-table th,
+.results-table td {
+  padding:0.5rem;
+  border-bottom:1px solid #ccc;
+  text-align:left;
+}
+
+.results-list {
+  list-style:none;
+  padding:0;
+  margin:0;
+}
+.results-list li {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  padding:0.5rem 0;
+  border-bottom:1px solid #ccc;
+}
+.label-correct {
+  color:#155724;
+  background:#d4edda;
+  padding:0.2rem 0.5rem;
+  border-radius:0.4rem;
+  margin-top:0.3rem;
+}
+.label-incorrect {
+  color:#721c24;
+  background:#f8d7da;
+  padding:0.2rem 0.5rem;
+  border-radius:0.4rem;
+  margin-top:0.3rem;
+}

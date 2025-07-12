@@ -134,6 +134,11 @@ async def get_student_results(student_id: int):
     return storage.list_student_results(student_id)
 
 
+@app.get("/api/student_summaries/{teacher_id}")
+async def get_student_summaries(teacher_id: int):
+    return storage.list_student_summaries(teacher_id)
+
+
 @app.get("/api/result/{res_id}")
 async def get_result(res_id: str):
     r = storage.get_result(res_id)
@@ -160,6 +165,8 @@ async def process(sentence: str = Form(...), file: UploadFile = File(...), teach
     filler_text = f"De zin was {sentence}"
     filler_audio = tts_to_file(filler_text)
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
+
+    results["correct"] = tutor_resp.is_correct
 
     dest_audio = storage.STORAGE_DIR / f"{results['session_id']}.wav"
     shutil.move(results["audio_file"], dest_audio)
@@ -225,6 +232,8 @@ async def realtime_stop(sid: str):
     tutor_resp = await gpt_client.chat(messages)
     from .tts import tts_to_file
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
+
+    results["correct"] = tutor_resp.is_correct
 
     dest_audio = storage.STORAGE_DIR / f"{results['session_id']}.wav"
     shutil.move(results["audio_file"], dest_audio)
