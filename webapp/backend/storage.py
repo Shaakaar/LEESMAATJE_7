@@ -175,7 +175,7 @@ def list_student_summaries(teacher_id: int):
             (sid,),
         )
         row = cur.fetchone()
-        stu["last_session"] = row["timestamp"] if row else None
+        stu["last_sentence"] = row["timestamp"] if row else None
 
         cur.execute(
             "SELECT json_data FROM results WHERE student_id=? AND timestamp>=?",
