@@ -169,6 +169,7 @@ async def process(sentence: str = Form(...), file: UploadFile = File(...), teach
         "feedback_text": tutor_resp.feedback_text,
         "filler_audio": os.path.basename(filler_audio),
         "feedback_audio": os.path.basename(feedback_audio),
+        "correct": tutor_resp.is_correct,
         "delay_seconds": config.DELAY_SECONDS,
     })
 
@@ -232,5 +233,6 @@ async def realtime_stop(sid: str):
         "feedback_text": tutor_resp.feedback_text,
         "filler_audio": os.path.basename(sess.filler_audio) if sess.filler_audio else None,
         "feedback_audio": os.path.basename(feedback_audio),
+        "correct": tutor_resp.is_correct,
         "delay_seconds": config.DELAY_SECONDS,
     })
