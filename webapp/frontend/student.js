@@ -47,23 +47,23 @@ async function initModels(){
   recordBtn.disabled = true;
   stopBtn.disabled = true;
   nextBtn.disabled = true;
-  statusEl.textContent = '🌀 Loading models…';
+  statusEl.textContent = '🌀 Modellen laden…';
   try {
     const r = await fetch('/api/initialize_models', {method:'POST'});
     const data = await r.json();
     if(r.ok){
-      statusEl.textContent = '✅ Models ready';
+      statusEl.textContent = '✅ Modellen klaar';
       recordBtn.disabled = false;
       nextBtn.disabled = false;
       setTimeout(() => { statusEl.textContent = ''; }, 2000);
     } else {
-      statusEl.textContent = '⚠️ Init failed: ' + data.detail;
+      statusEl.textContent = '⚠️ Initialisatie mislukt: ' + data.detail;
       recordBtn.disabled = true;
       stopBtn.disabled = true;
       nextBtn.disabled = true;
     }
   } catch(err) {
-    statusEl.textContent = '⚠️ Init failed: ' + err.message;
+    statusEl.textContent = '⚠️ Initialisatie mislukt: ' + err.message;
     recordBtn.disabled = true;
     stopBtn.disabled = true;
     nextBtn.disabled = true;
@@ -75,7 +75,7 @@ nextBtn.onclick = async () => {
   const r = await fetch('/api/next_sentence');
   const j = await r.json();
   if(!r.ok){
-    statusEl.textContent = 'Error: ' + j.detail;
+    statusEl.textContent = 'Fout: ' + j.detail;
     return;
   }
   sentence = j.sentence;
@@ -101,7 +101,7 @@ recordBtn.onclick = async () => {
   const r = await fetch('/api/realtime/start', {method:'POST', body: fd});
   const j = await r.json();
   if(!r.ok){
-    statusEl.textContent = 'Error: ' + j.detail;
+    statusEl.textContent = 'Fout: ' + j.detail;
     return;
   }
   sessionId = j.session_id;
@@ -133,7 +133,7 @@ recordBtn.onclick = async () => {
   recordBtn.disabled = true;
   retryBtn.disabled = true;
   playbackBtn.disabled = true;
-  statusEl.innerHTML = '<span class="spinner"></span>Recording';
+  statusEl.innerHTML = '<span class="spinner"></span>Opnemen';
 };
 
 stopBtn.onclick = async () => {
@@ -141,26 +141,26 @@ stopBtn.onclick = async () => {
   processor.disconnect();
   stream.getTracks().forEach(t => t.stop());
   stopBtn.disabled = true;
-  statusEl.innerHTML = '<span class="spinner"></span>Analyzing';
+  statusEl.innerHTML = '<span class="spinner"></span>Analyseren';
 
   const stopPromise = fetch('/api/realtime/stop/' + sessionId, { method: 'POST' })
     .then(async r => {
       const j = await r.json();
       if(!r.ok){
-        statusEl.textContent = 'Error: ' + j.detail;
+        statusEl.textContent = 'Fout: ' + j.detail;
         throw new Error(j.detail);
       }
       return j;
     });
   sessionId = null;
   setTimeout(async () => {
-    statusEl.innerHTML = '<span class="spinner"></span>Playing feedback';
+    statusEl.innerHTML = '<span class="spinner"></span>Feedback afspelen';
     playAudio('/api/audio/' + fillerAudio, async () => {
       let data;
       try {
         data = await stopPromise;
       } catch(err) {
-        statusEl.textContent = 'Error: ' + err.message;
+        statusEl.textContent = 'Fout: ' + err.message;
         return;
       }
       const total = recordedChunks.reduce((n,c)=>n+c.length,0);

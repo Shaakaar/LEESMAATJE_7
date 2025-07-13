@@ -52,7 +52,12 @@ h1,h2,h3 {
 }
 .top-bar h1 { flex:1; text-align:left; }
 .top-bar span { flex:1; text-align:center; }
-.top-bar button { flex:1; text-align:right; }
+.top-bar button {
+  flex:0;
+  margin-left:auto;
+  text-align:right;
+  width:auto;
+}
 
 .tabs {
   display:flex;
