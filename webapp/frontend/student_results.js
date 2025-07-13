@@ -16,23 +16,27 @@ document.getElementById('logout').onclick = () => {
 async function loadResults(){
   const r = await fetch('/api/student_results/' + studentId);
   const list = await r.json();
-  const ul = document.getElementById('results');
-  ul.innerHTML = '';
+  const tbody = document.querySelector('#results tbody');
+  tbody.innerHTML = '';
   list.forEach(res => {
-    const li = document.createElement('li');
-    const sent = document.createElement('div');
-    sent.textContent = res.sentence;
+    const tr = document.createElement('tr');
+    const tdSentence = document.createElement('td');
+    tdSentence.textContent = res.sentence;
+    const tdAudio = document.createElement('td');
     const audio = document.createElement('audio');
     audio.controls = true;
     audio.src = '/api/audio/' + res.audio_path.split('/').pop();
+    tdAudio.appendChild(audio);
+    const tdResult = document.createElement('td');
     const label = document.createElement('span');
     const correct = res.json_data && res.json_data.correct;
     label.textContent = correct ? 'Correct' : 'Incorrect';
     label.className = correct ? 'label-correct' : 'label-incorrect';
-    li.appendChild(sent);
-    li.appendChild(audio);
-    li.appendChild(label);
-    ul.appendChild(li);
+    tdResult.appendChild(label);
+    tr.appendChild(tdSentence);
+    tr.appendChild(tdAudio);
+    tr.appendChild(tdResult);
+    tbody.appendChild(tr);
   });
 }
 
