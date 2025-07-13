@@ -28,6 +28,11 @@ h1,h2,h3 {
   box-shadow:0 4px 6px rgba(0,0,0,0.1);
 }
 
+/* Make the reading pane a bit wider for longer sentences */
+.ui-pane {
+  max-width:600px;
+}
+
 /* Wider container for the student results table */
 .results-container {
   background:#fff;

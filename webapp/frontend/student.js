@@ -25,6 +25,7 @@ const stopBtn = document.getElementById('stop');
 const playbackBtn = document.getElementById('playback');
 const retryBtn = document.getElementById('retry');
 const nextBtn = document.getElementById('next');
+const prevBtn = document.getElementById('prev');
 progressText.textContent = '';
 document.addEventListener("DOMContentLoaded", initModels);
 
@@ -47,6 +48,7 @@ async function initModels(){
   recordBtn.disabled = true;
   stopBtn.disabled = true;
   nextBtn.disabled = true;
+  prevBtn.disabled = true;
   statusEl.textContent = '🌀 Modellen laden…';
   try {
     const r = await fetch('/api/initialize_models', {method:'POST'});
@@ -73,6 +75,25 @@ async function initModels(){
 
 nextBtn.onclick = async () => {
   const r = await fetch('/api/next_sentence');
+  const j = await r.json();
+  if(!r.ok){
+    statusEl.textContent = 'Fout: ' + j.detail;
+    return;
+  }
+  sentence = j.sentence;
+  sentenceEl.textContent = sentence;
+  feedbackModule.classList.remove('visible');
+  progressBar.style.width = ((j.index / j.total) * 100) + '%';
+  progressText.textContent = `${j.index}/${j.total}`;
+  recordBtn.disabled = false;
+  retryBtn.disabled = true;
+  playbackBtn.disabled = true;
+  nextBtn.disabled = true;
+  prevBtn.disabled = false;
+};
+
+prevBtn.onclick = async () => {
+  const r = await fetch('/api/prev_sentence');
   const j = await r.json();
   if(!r.ok){
     statusEl.textContent = 'Fout: ' + j.detail;
@@ -177,6 +198,7 @@ stopBtn.onclick = async () => {
       playbackBtn.disabled = false;
       retryBtn.disabled = false;
       nextBtn.disabled = false;
+      prevBtn.disabled = false;
   });
   }, delaySeconds * 1000);
 };
