@@ -47,10 +47,12 @@ h1,h2,h3 {
 
 .top-bar {
   display:flex;
-  justify-content:space-between;
   align-items:center;
   margin-bottom:1rem;
 }
+.top-bar h1 { flex:1; text-align:left; }
+.top-bar span { flex:1; text-align:center; }
+.top-bar button { flex:1; text-align:right; }
 
 .tabs {
   display:flex;
@@ -71,11 +73,17 @@ h1,h2,h3 {
 
 .card {
   background:#fff;
-  font-size:3rem;
+  font-size:2.5rem;
   padding:1rem;
   border-radius:1rem;
   box-shadow:0 2px 4px rgba(0,0,0,0.1);
   margin-bottom:1rem;
+}
+.sentence-label {
+  font-weight:600;
+  display:block;
+  margin-bottom:0.5rem;
+  text-align:left;
 }
 
 input {
@@ -111,6 +119,16 @@ button.accent {
   color:var(--text);
 }
 
+.btn-row {
+  display:flex;
+  gap:0.5rem;
+  margin-top:0.5rem;
+}
+.btn-row button {
+  flex:1;
+  margin:0;
+}
+
 #status {
   margin-top:1rem;
   font-weight:bold;
@@ -131,6 +149,7 @@ button.accent {
 }
 .feedback.visible {
   opacity:1;
+  animation: fadeIn .3s forwards;
 }
 .feedback.positive {
   background:#d4edda;
@@ -165,6 +184,26 @@ button.accent {
   background:var(--primary);
   width:0%;
   transition:width .3s;
+}
+
+.progress-text {
+  margin-top:0.3rem;
+  font-weight:bold;
+}
+
+.spinner {
+  display:inline-block;
+  width:1em;
+  height:1em;
+  border:3px solid rgba(0,0,0,0.2);
+  border-left-color:var(--primary);
+  border-radius:50%;
+  animation: spin 1s linear infinite;
+  margin-right:0.4rem;
+}
+
+@keyframes spin {
+  to {transform:rotate(360deg);}
 }
 
 .results-table {
