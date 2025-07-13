@@ -27,7 +27,8 @@ const retryBtn = document.getElementById('retry');
 const nextBtn = document.getElementById('next');
 const prevBtn = document.getElementById('prev');
 progressText.textContent = '';
-document.addEventListener("DOMContentLoaded", initModels);
+// Models are initialized on the login page, so no need to
+// initialize them again here.
 
 
 const params = new URLSearchParams(window.location.search);
@@ -44,33 +45,7 @@ if(studentName){
   document.getElementById('student_name').textContent = studentName;
 }
 
-async function initModels(){
-  recordBtn.disabled = true;
-  stopBtn.disabled = true;
-  nextBtn.disabled = true;
-  prevBtn.disabled = true;
-  statusEl.textContent = '🌀 Modellen laden…';
-  try {
-    const r = await fetch('/api/initialize_models', {method:'POST'});
-    const data = await r.json();
-    if(r.ok){
-      statusEl.textContent = '✅ Modellen klaar';
-      recordBtn.disabled = false;
-      nextBtn.disabled = false;
-      setTimeout(() => { statusEl.textContent = ''; }, 2000);
-    } else {
-      statusEl.textContent = '⚠️ Initialisatie mislukt: ' + data.detail;
-      recordBtn.disabled = true;
-      stopBtn.disabled = true;
-      nextBtn.disabled = true;
-    }
-  } catch(err) {
-    statusEl.textContent = '⚠️ Initialisatie mislukt: ' + err.message;
-    recordBtn.disabled = true;
-    stopBtn.disabled = true;
-    nextBtn.disabled = true;
-  }
-}
+
 
 
 nextBtn.onclick = async () => {
