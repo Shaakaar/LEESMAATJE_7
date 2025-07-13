@@ -20,6 +20,7 @@ async function loadResults(){
   tbody.innerHTML = '';
   list.forEach(res => {
     const tr = document.createElement('tr');
+    tr.classList.add('fade-in');
     const tdSentence = document.createElement('td');
     tdSentence.textContent = res.sentence;
     const tdAudio = document.createElement('td');

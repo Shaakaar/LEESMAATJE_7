@@ -31,10 +31,10 @@ h1,h2,h3 {
 /* Wider container for the student results table */
 .results-container {
   background:#fff;
-  padding:1.5rem;
+  padding:2rem 1rem;
   margin:0 auto;
   width:100%;
-  max-width:1000px;
+  max-width:900px;
   border-radius:1rem;
   box-shadow:0 4px 6px rgba(0,0,0,0.1);
 }
@@ -178,7 +178,7 @@ button.accent {
 }
 .results-table th,
 .results-table td {
-  padding:0.8rem;
+  padding:1rem;
   border-bottom:1px solid #e0e6ef;
   text-align:left;
   vertical-align:middle;
@@ -187,7 +187,7 @@ button.accent {
   background:#f9f9f9;
 }
 .results-table audio {
-  width:150px;
+  width:120px;
   max-width:100%;
 }
 
@@ -206,17 +206,26 @@ button.accent {
 .label-correct,
 .label-incorrect {
   display:inline-block;
-  padding:0.3rem 0.8rem;
+  padding:.4rem .8rem;
   border-radius:9999px;
-  font-size:0.9rem;
+  font-size:.9rem;
   font-weight:600;
-  margin:0.2rem 0;
+  margin:0;
 }
 .label-correct {
-  color:#155724;
   background:#d4edda;
+  color:#155724;
 }
 .label-incorrect {
-  color:#721c24;
   background:#f8d7da;
+  color:#721c24;
+}
+
+.fade-in {
+  animation: fadeIn .4s ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity:0; }
+  to { opacity:1; }
 }
