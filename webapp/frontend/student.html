@@ -15,13 +15,22 @@
     <button id="logout" class="accent">Log out</button>
   </div>
   <div class="ui-pane">
+    <label for="sentence" class="sentence-label">Sentence to read:</label>
     <div id="sentence" class="card"></div>
-    <div class="progress"><div id="progress_bar" class="progress-bar"></div></div>
+    <div class="progress">
+      <div id="progress_bar" class="progress-bar"></div>
+    </div>
+    <div id="progress_text" class="progress-text"></div>
     <div id="status"></div>
-    <button id="init">Initialize models</button>
-    <button id="record">Record</button>
-    <button id="stop" disabled>Stop</button>
-    <button id="next">Next sentence</button>
+    <div class="btn-row">
+      <button id="record">Record</button>
+      <button id="stop" disabled>Stop</button>
+      <button id="playback" disabled>Play back</button>
+    </div>
+    <div class="btn-row">
+      <button id="retry" disabled>Retry</button>
+      <button id="next" disabled>Next sentence</button>
+    </div>
 
     <div class="feedback" aria-live="polite">
       <p class="text">Great articulation! Keep it up.</p>
