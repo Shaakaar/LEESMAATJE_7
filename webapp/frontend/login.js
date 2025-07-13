@@ -24,7 +24,7 @@ showTeacherBtn.onclick = () => {
 document.getElementById('stu_login').onclick = async () => {
   const code = document.getElementById('stu_teacher').value.trim();
   if(!practiceMode && !code){
-    messageEl.textContent = 'Please enter a class code';
+    messageEl.textContent = 'Voer een klascode in';
     return;
   }
   const fd = new FormData();
@@ -43,7 +43,7 @@ document.getElementById('stu_login').onclick = async () => {
     window.location.href = '/static/student.html?' + params.toString();
   } else {
     const j = await r.json();
-    messageEl.textContent = j.detail || 'Student login failed';
+    messageEl.textContent = j.detail || 'Leerling inloggen mislukt';
   }
 };
 
@@ -63,10 +63,10 @@ document.getElementById('stu_register').onclick = async () => {
   }
   const r = await fetch('/api/register_student', {method:'POST', body: fd});
   if(r.ok){
-    messageEl.textContent = 'Student registered';
+    messageEl.textContent = 'Leerling geregistreerd';
   } else {
     const j = await r.json();
-    messageEl.textContent = j.detail || 'Student registration failed';
+    messageEl.textContent = j.detail || 'Registratie leerling mislukt';
   }
 };
 
@@ -80,7 +80,7 @@ document.getElementById('teach_login').onclick = async () => {
     const params = new URLSearchParams({teacher_id: j.teacher_id});
     window.location.href = '/static/teacher.html?' + params.toString();
   } else {
-    messageEl.textContent = 'Teacher login failed';
+    messageEl.textContent = 'Leraar inloggen mislukt';
   }
 };
 
@@ -91,8 +91,8 @@ document.getElementById('teach_register').onclick = async () => {
   const r = await fetch('/api/register', {method:'POST', body: fd});
   if(r.ok){
     const j = await r.json();
-    messageEl.textContent = 'Teacher registered. ID: ' + j.teacher_id;
+    messageEl.textContent = 'Leraar geregistreerd. ID: ' + j.teacher_id;
   } else {
-    messageEl.textContent = 'Teacher registration failed';
+    messageEl.textContent = 'Registratie leraar mislukt';
   }
 };

@@ -4,7 +4,7 @@ if (isNaN(teacherId)) {
   window.location.href = '/';
 }
 
-document.getElementById('class_code').textContent = 'Class ' + teacherId;
+document.getElementById('class_code').textContent = 'Klas ' + teacherId;
 
 document.getElementById('logout').onclick = () => {
   window.location.assign('/');
@@ -35,7 +35,7 @@ async function loadStudents() {
     tbody.appendChild(tr);
   });
   } catch (err) {
-    console.error('Failed to load students', err);
+    console.error('Laden van leerlingen mislukt', err);
   }
 }
 

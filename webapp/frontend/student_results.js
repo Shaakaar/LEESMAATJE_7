@@ -34,7 +34,7 @@ async function loadResults(){
     const tdResult = document.createElement('td');
     const label = document.createElement('span');
     const correct = res.json_data && res.json_data.correct;
-    label.textContent = correct ? 'Correct' : 'Incorrect';
+    label.textContent = correct ? 'Goed' : 'Fout';
     label.className = correct ? 'label-correct' : 'label-incorrect';
     tdResult.appendChild(label);
     tr.appendChild(tdSentence);

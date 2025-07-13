@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Leesmaatje Student</title>
+  <title>Leesmaatje Leerling</title>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600&family=Nunito+Sans:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/lucide-static@0.263.0/font/css/lucide.css">
   <link rel="stylesheet" href="/static/style.css">
@@ -12,10 +12,10 @@
   <div class="top-bar">
     <h1>Leesmaatje</h1>
     <span id="student_name"></span>
-    <button id="logout" class="accent">Log out</button>
+    <button id="logout" class="accent">Uitloggen</button>
   </div>
   <div class="ui-pane">
-    <label for="sentence" class="sentence-label">Sentence to read:</label>
+    <label for="sentence" class="sentence-label">Zin om te lezen:</label>
     <div id="sentence" class="card"></div>
     <div class="progress">
       <div id="progress_bar" class="progress-bar"></div>
@@ -23,18 +23,18 @@
     <div id="progress_text" class="progress-text"></div>
     <div id="status"></div>
     <div class="btn-row">
-      <button id="record">Record</button>
+      <button id="record">Opnemen</button>
       <button id="stop" disabled>Stop</button>
-      <button id="playback" disabled>Play back</button>
+      <button id="playback" disabled>Afspelen</button>
     </div>
     <div class="btn-row">
-      <button id="retry" disabled>Retry</button>
-      <button id="next" disabled>Next sentence</button>
+      <button id="retry" disabled>Opnieuw</button>
+      <button id="next" disabled>Volgende zin</button>
     </div>
 
     <div class="feedback" aria-live="polite">
-      <p class="text">Great articulation! Keep it up.</p>
-      <button class="replay-btn" aria-label="Play feedback again">
+      <p class="text">Goed uitgesproken! Ga zo door.</p>
+      <button class="replay-btn" aria-label="Speel feedback opnieuw af">
         <i class="lucide lucide-volume-2"></i>
       </button>
     </div>
