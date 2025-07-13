@@ -124,6 +124,20 @@ async def next_sentence():
     }
 
 
+@app.get("/api/prev_sentence")
+async def prev_sentence():
+    global sent_index
+    total = len(config.SENTENCES)
+    sent_index = (sent_index - 2) % total
+    sentence = config.SENTENCES[sent_index]
+    sent_index += 1
+    return {
+        "sentence": sentence,
+        "index": sent_index,
+        "total": total,
+    }
+
+
 @app.get("/api/results/{teacher_id}")
 async def get_results(teacher_id: int):
     return storage.list_results(teacher_id)
