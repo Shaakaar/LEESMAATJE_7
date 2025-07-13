@@ -42,13 +42,30 @@ if(studentName){
 }
 
 async function initModels(){
-  statusEl.innerHTML = '<span class="spinner"></span>Loading models...';
-  await fetch('/api/initialize_models', {method:'POST'});
-  statusEl.textContent = '';
-  nextBtn.disabled = false;
+  statusEl.textContent = '🌀 Loading models…';
+  try {
+    const r = await fetch('/api/initialize_models', {method:'POST'});
+    if(!r.ok) throw new Error('Failed');
+    statusEl.textContent = 'Models ready';
+    nextBtn.disabled = false;
+    setTimeout(() => {
+      statusEl.classList.add('fade-out');
+      setTimeout(() => {
+        statusEl.textContent = '';
+        statusEl.classList.remove('fade-out');
+      }, 1000);
+    }, 2000);
+  } catch(err) {
+    statusEl.textContent = 'Could not load models';
+    recordBtn.disabled = true;
+    stopBtn.disabled = true;
+    playbackBtn.disabled = true;
+    retryBtn.disabled = true;
+    nextBtn.disabled = true;
+  }
 }
 
-initModels();
+document.addEventListener('DOMContentLoaded', initModels);
 
 nextBtn.onclick = async () => {
   const r = await fetch('/api/next_sentence');
