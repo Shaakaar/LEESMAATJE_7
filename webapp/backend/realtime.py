@@ -3,6 +3,7 @@ import uuid
 import wave
 import tempfile
 import time
+import json
 from typing import Dict, Any
 
 import numpy as np
@@ -10,7 +11,10 @@ import numpy as np
 from FASE2_audio import audio_q
 from FASE2_wav2vec2_process import Wav2Vec2PhonemeExtractor, Wav2Vec2Transcriber
 from FASE2_azure_process import AzurePronunciationEvaluator, AzurePlainTranscriber
+from rich.console import Console
 from . import config, analysis_pipeline
+
+console = Console()
 
 
 class RealtimeSession:
@@ -115,4 +119,6 @@ class RealtimeSession:
         self.wavefile.close()
 
         self.results["end_time"] = time.time()
+        console.rule("[bold green]JSON Results[/bold green]")
+        console.print_json(data=self.results)
         return self.results
