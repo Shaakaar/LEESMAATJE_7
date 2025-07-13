@@ -31,16 +31,17 @@ h1,h2,h3 {
 /* Wider container for the student results table */
 .results-container {
   background:#fff;
-  padding:1.5rem;
+  padding:2rem;
   margin:0 auto;
-  width:80%;
+  max-width:1000px;
+  width:100%;
   border-radius:1rem;
   box-shadow:0 4px 6px rgba(0,0,0,0.1);
 }
 
 @media (max-width:600px){
   .results-container {
-    width:100%;
+    padding:1.5rem;
   }
 }
 
@@ -168,7 +169,8 @@ button.accent {
 
 .results-table {
   width:100%;
-  border-collapse:collapse;
+  border-collapse:separate;
+  border-spacing:0;
   margin-top:1rem;
 }
 .table-wrapper {
@@ -176,15 +178,17 @@ button.accent {
 }
 .results-table th,
 .results-table td {
-  padding:0.5rem;
+  padding:0.8rem;
   border-bottom:1px solid #ccc;
   text-align:left;
+  vertical-align:middle;
+  white-space:nowrap;
 }
 .results-table tbody tr:nth-child(even){
   background:#f9f9f9;
 }
 .results-table audio {
-  width:80px;
+  width:150px;
 }
 
 .results-list {
@@ -199,17 +203,19 @@ button.accent {
   padding:0.5rem 0;
   border-bottom:1px solid #ccc;
 }
+.label-correct,
+.label-incorrect {
+  display:inline-block;
+  padding:0.3rem 0.8rem;
+  border-radius:9999px;
+  margin:0.2rem 0;
+  font-size:0.9rem;
+}
 .label-correct {
   color:#155724;
   background:#d4edda;
-  padding:0.2rem 0.5rem;
-  border-radius:0.4rem;
-  margin-top:0.3rem;
 }
 .label-incorrect {
   color:#721c24;
   background:#f8d7da;
-  padding:0.2rem 0.5rem;
-  border-radius:0.4rem;
-  margin-top:0.3rem;
 }
