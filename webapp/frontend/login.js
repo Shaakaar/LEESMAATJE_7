@@ -5,23 +5,39 @@ const showStudentBtn = document.getElementById('show_student');
 const showTeacherBtn = document.getElementById('show_teacher');
 const practiceBtn = document.getElementById('stu_practice');
 
-// Kick off model initialization as soon as this script loads
+// Kick off model initialization once the page has fully loaded
 let modelsReady = false;
-const modelsPromise = fetch('/api/initialize_models', {method: 'POST'})
-  .then(r => r.json())
-  .then(() => { modelsReady = true; })
-  .catch(err => {
-    console.error('Model initialisatie mislukt', err);
-    messageEl.textContent = 'Initialisatie mislukt';
-  });
+let modelsPromise = null;
+window.addEventListener('load', () => {
+  modelsPromise = fetch('/api/initialize_models', {method: 'POST'})
+    .then(r => r.json())
+    .then(() => { modelsReady = true; })
+    .catch(err => {
+      console.error('Model initialisatie mislukt', err);
+      messageEl.textContent = 'Initialisatie mislukt';
+    });
+});
+
+const overlay = document.getElementById('loading_overlay');
+
+function showOverlay(){
+  overlay.style.display = 'flex';
+}
+
+function hideOverlay(){
+  overlay.style.display = 'none';
+}
 
 async function waitForModels(){
   if(modelsReady) return;
-  messageEl.innerHTML = '<span class="spinner"></span>Laden...';
+  showOverlay();
   try {
+    if(!modelsPromise){
+      await new Promise(res => window.addEventListener('load', res, {once: true}));
+    }
     await modelsPromise;
   } finally {
-    messageEl.textContent = '';
+    hideOverlay();
   }
 }
 
@@ -42,22 +58,26 @@ showTeacherBtn.onclick = () => {
 };
 
 document.getElementById('stu_login').onclick = async () => {
+  const username = document.getElementById('stu_user').value;
+  const password = document.getElementById('stu_pass').value;
   const code = document.getElementById('stu_teacher').value.trim();
   if(!practiceMode && !code){
     messageEl.textContent = 'Voer een klascode in';
     return;
   }
+  if(!modelsReady){
+    await waitForModels();
+  }
   const fd = new FormData();
-  fd.append('username', document.getElementById('stu_user').value);
-  fd.append('password', document.getElementById('stu_pass').value);
+  fd.append('username', username);
+  fd.append('password', password);
   if(!practiceMode && code){
     fd.append('teacher_id', code);
   }
   const r = await fetch('/api/login_student', {method:'POST', body: fd});
   if(r.ok){
     const j = await r.json();
-    await waitForModels();
-    const params = new URLSearchParams({student_id: j.student_id, name: document.getElementById('stu_user').value});
+    const params = new URLSearchParams({student_id: j.student_id, name: username});
     if(j.teacher_id !== null){
       params.append('teacher_id', j.teacher_id);
     }
@@ -92,13 +112,17 @@ document.getElementById('stu_register').onclick = async () => {
 };
 
 document.getElementById('teach_login').onclick = async () => {
+  const username = document.getElementById('teach_user').value;
+  const password = document.getElementById('teach_pass').value;
+  if(!modelsReady){
+    await waitForModels();
+  }
   const fd = new FormData();
-  fd.append('username', document.getElementById('teach_user').value);
-  fd.append('password', document.getElementById('teach_pass').value);
+  fd.append('username', username);
+  fd.append('password', password);
   const r = await fetch('/api/login', {method:'POST', body: fd});
   if(r.ok){
     const j = await r.json();
-    await waitForModels();
     const params = new URLSearchParams({teacher_id: j.teacher_id});
     window.location.href = '/static/teacher.html?' + params.toString();
   } else {
