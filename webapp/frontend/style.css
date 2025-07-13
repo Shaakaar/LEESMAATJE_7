@@ -212,6 +212,20 @@ button.accent {
   margin-right:0.4rem;
 }
 
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  z-index: 1000;
+}
+
 @keyframes spin {
   to {transform:rotate(360deg);}
 }
