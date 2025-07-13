@@ -26,7 +26,10 @@ async function loadResults(){
     const tdAudio = document.createElement('td');
     const audio = document.createElement('audio');
     audio.controls = true;
-    audio.src = '/api/audio/' + res.audio_path.split('/').pop();
+    // Extract the filename from the stored path. Results may contain
+    // Windows or POSIX style separators, so handle both.
+    const baseName = res.audio_path.split(/[\\/]/).pop();
+    audio.src = '/api/audio/' + baseName;
     tdAudio.appendChild(audio);
     const tdResult = document.createElement('td');
     const label = document.createElement('span');
