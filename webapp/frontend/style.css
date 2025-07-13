@@ -139,6 +139,44 @@ button.accent {
   margin:0;
 }
 
+.btn-row button i {
+  margin-right:0.3rem;
+}
+
+.mic-container {
+  display:flex;
+  justify-content:center;
+  margin-top:1rem;
+}
+
+.mic-btn {
+  width:120px;
+  height:120px;
+  border-radius:50%;
+  padding:0;
+  flex-direction:column;
+  font-size:2rem;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.mic-btn .label {
+  font-size:1rem;
+  margin-top:0.3rem;
+}
+
+.mic-btn.active {
+  box-shadow:0 0 0 4px rgba(79,140,255,0.4);
+  animation:pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow:0 0 0 4px rgba(79,140,255,0.4); }
+  50% { box-shadow:0 0 0 8px rgba(79,140,255,0.6); }
+  100% { box-shadow:0 0 0 4px rgba(79,140,255,0.4); }
+}
+
 #status {
   margin-top:1rem;
   font-weight:bold;
@@ -176,6 +214,13 @@ button.accent {
   display:flex;
   align-items:center;
   justify-content:center;
+}
+
+.highlight {
+  font-weight:bold;
+  background:#fff3ac;
+  padding:0 0.2rem;
+  border-radius:0.2rem;
 }
 .error {
   color:red;

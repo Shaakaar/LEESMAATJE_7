@@ -22,8 +22,7 @@ const textEl = feedbackModule.querySelector('.text');
 const replayBtn = feedbackModule.querySelector('.replay-btn');
 const progressBar = document.getElementById('progress_bar');
 const progressText = document.getElementById('progress_text');
-const recordBtn = document.getElementById('record');
-const stopBtn = document.getElementById('stop');
+const micBtn = document.getElementById('mic');
 const playbackBtn = document.getElementById('playback');
 const retryBtn = document.getElementById('retry');
 const nextBtn = document.getElementById('next');
@@ -62,7 +61,7 @@ nextBtn.onclick = async () => {
   feedbackModule.classList.remove('visible');
   progressBar.style.width = ((j.index / j.total) * 100) + '%';
   progressText.textContent = `${j.index}/${j.total}`;
-  recordBtn.disabled = false;
+  micBtn.disabled = false;
   retryBtn.disabled = true;
   playbackBtn.disabled = true;
   nextBtn.disabled = true;
@@ -81,13 +80,13 @@ prevBtn.onclick = async () => {
   feedbackModule.classList.remove('visible');
   progressBar.style.width = ((j.index / j.total) * 100) + '%';
   progressText.textContent = `${j.index}/${j.total}`;
-  recordBtn.disabled = false;
+  micBtn.disabled = false;
   retryBtn.disabled = true;
   playbackBtn.disabled = true;
   nextBtn.disabled = true;
 };
 
-recordBtn.onclick = async () => {
+async function startRecording(){
   if (!sentence) return;
   stream = await navigator.mediaDevices.getUserMedia({audio:true});
   audioCtx = new AudioContext();
@@ -146,18 +145,29 @@ recordBtn.onclick = async () => {
   playbackUrl && URL.revokeObjectURL(playbackUrl);
   playbackUrl = null;
   recording = true;
-  stopBtn.disabled = false;
-  recordBtn.disabled = true;
+  micBtn.classList.add('active');
+  micBtn.querySelector('.label').textContent = 'Luisteren...';
   retryBtn.disabled = true;
   playbackBtn.disabled = true;
+  nextBtn.disabled = true;
   statusEl.innerHTML = '<span class="spinner"></span>Opnemen';
+}
+
+micBtn.onclick = () => {
+  if(recording){
+    stopRecording();
+  } else {
+    startRecording();
+  }
 };
 
-stopBtn.onclick = async () => {
+async function stopRecording(){
   recording = false;
   processor.disconnect();
   stream.getTracks().forEach(t => t.stop());
-  stopBtn.disabled = true;
+  micBtn.disabled = true;
+  micBtn.classList.remove('active');
+  micBtn.querySelector('.label').textContent = 'Analyseren...';
   statusEl.innerHTML = '<span class="spinner"></span>Analyseren';
 
   if(startPromise){
@@ -200,13 +210,15 @@ stopBtn.onclick = async () => {
       playbackUrl = URL.createObjectURL(wav);
       showFeedback(data);
       statusEl.textContent = '';
+      micBtn.disabled = false;
+      micBtn.querySelector('.label').textContent = 'Opnemen';
       playbackBtn.disabled = false;
       retryBtn.disabled = false;
       nextBtn.disabled = false;
       prevBtn.disabled = false;
   });
   }, delaySeconds * 1000);
-};
+}
 
 function playAudio(url, cb){
   const a = new Audio(url);
@@ -235,7 +247,9 @@ function encodeWav(samples, sampleRate){
 }
 
 function showFeedback(data){
-  textEl.textContent = data.feedback_text;
+  const html = data.feedback_text.replace(/\*\*(.*?)\*\*/g,
+    '<strong class="highlight">$1</strong>');
+  textEl.innerHTML = html;
   feedbackModule.classList.add('visible');
   let negative;
   if(typeof data.correct === 'boolean'){
@@ -267,7 +281,8 @@ retryBtn.onclick = () => {
   playbackUrl = null;
   recordedChunks = [];
   statusEl.textContent = '';
-  recordBtn.disabled = false;
+  micBtn.disabled = false;
+  micBtn.querySelector('.label').textContent = 'Opnemen';
   playbackBtn.disabled = true;
   retryBtn.disabled = true;
   nextBtn.disabled = true;
