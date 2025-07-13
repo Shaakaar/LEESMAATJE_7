@@ -7,7 +7,6 @@ import os
 import tempfile
 import shutil
 import sqlite3
-import json
 
 from . import config, storage
 # Heavy dependencies such as the analysis pipeline, text to speech and
@@ -158,7 +157,6 @@ async def get_result(res_id: str):
     r = storage.get_result(res_id)
     if not r:
         raise HTTPException(status_code=404, detail="Not found")
-    r["json_data"] = json.loads(r["json_data"])
     return r
 
 
@@ -173,7 +171,7 @@ async def process(sentence: str = Form(...), file: UploadFile = File(...), teach
     from .tts import tts_to_file
 
     results = analyze_audio(wav_bytes, sentence)
-    _, messages = prompt_builder.build(results, state={})
+    req, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
 
     filler_text = f"De zin was {sentence}"
@@ -184,7 +182,13 @@ async def process(sentence: str = Form(...), file: UploadFile = File(...), teach
 
     dest_audio = storage.STORAGE_DIR / f"{results['session_id']}.wav"
     shutil.move(results["audio_file"], dest_audio)
-    storage.save_result(teacher_id, student_id, results, str(dest_audio))
+    storage.save_result(
+        teacher_id,
+        student_id,
+        results,
+        str(dest_audio),
+        req.model_dump_json(),
+    )
 
     return JSONResponse({
         "feedback_text": tutor_resp.feedback_text,
@@ -242,7 +246,7 @@ async def realtime_stop(sid: str):
     if not sess:
         raise HTTPException(status_code=404, detail="Unknown session")
     results = sess.stop()
-    _, messages = prompt_builder.build(results, state={})
+    req, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
     from .tts import tts_to_file
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
@@ -251,7 +255,13 @@ async def realtime_stop(sid: str):
 
     dest_audio = storage.STORAGE_DIR / f"{results['session_id']}.wav"
     shutil.move(results["audio_file"], dest_audio)
-    storage.save_result(sess.teacher_id, sess.student_id, results, str(dest_audio))
+    storage.save_result(
+        sess.teacher_id,
+        sess.student_id,
+        results,
+        str(dest_audio),
+        req.model_dump_json(),
+    )
     return JSONResponse({
         "feedback_text": tutor_resp.feedback_text,
         "filler_audio": os.path.basename(sess.filler_audio) if sess.filler_audio else None,

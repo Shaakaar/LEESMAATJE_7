@@ -48,6 +48,7 @@ def init_db():
                 timestamp TEXT,
                 audio_path TEXT,
                 json_data TEXT,
+                prompt_json TEXT,
                 FOREIGN KEY (teacher_id) REFERENCES teachers(id),
                 FOREIGN KEY (student_id) REFERENCES students(id)
             )"""
@@ -57,6 +58,9 @@ def init_db():
     columns = [row[1] for row in cur.fetchall()]
     if "student_id" not in columns:
         cur.execute("ALTER TABLE results ADD COLUMN student_id INTEGER")
+        conn.commit()
+    if "prompt_json" not in columns:
+        cur.execute("ALTER TABLE results ADD COLUMN prompt_json TEXT")
         conn.commit()
     conn.commit()
 
@@ -106,11 +110,12 @@ def authenticate_student(username: str, password: str):
     return (row["id"], row["teacher_id"]) if row else (None, None)
 
 
-def save_result(teacher_id: int, student_id: int, result: dict, audio_path: str):
+def save_result(teacher_id: int, student_id: int, result: dict,
+                audio_path: str, prompt_json: str):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO results(id, teacher_id, student_id, sentence, timestamp, audio_path, json_data) VALUES(?,?,?,?,?,?,?)",
+        "INSERT INTO results(id, teacher_id, student_id, sentence, timestamp, audio_path, json_data, prompt_json) VALUES(?,?,?,?,?,?,?,?)",
         (
             result.get("session_id"),
             teacher_id,
@@ -119,6 +124,7 @@ def save_result(teacher_id: int, student_id: int, result: dict, audio_path: str)
             result.get("start_time"),
             audio_path,
             json.dumps(result, ensure_ascii=False),
+            prompt_json,
         ),
     )
     conn.commit()
@@ -143,7 +149,7 @@ def list_student_results(student_id: int):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, sentence, timestamp, audio_path, json_data FROM results WHERE student_id=? ORDER BY timestamp DESC",
+        "SELECT id, sentence, timestamp, audio_path, json_data, prompt_json FROM results WHERE student_id=? ORDER BY timestamp DESC",
         (student_id,),
     )
     rows = []
@@ -153,6 +159,10 @@ def list_student_results(student_id: int):
             row["json_data"] = json.loads(row["json_data"])
         except Exception:
             row["json_data"] = {}
+        try:
+            row["prompt_json"] = json.loads(row["prompt_json"])
+        except Exception:
+            row["prompt_json"] = {}
         rows.append(row)
     return rows
 
@@ -199,4 +209,15 @@ def get_result(result_id: str):
     cur = conn.cursor()
     cur.execute("SELECT * FROM results WHERE id=?", (result_id,))
     row = cur.fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    res = dict(row)
+    try:
+        res["json_data"] = json.loads(res["json_data"])
+    except Exception:
+        res["json_data"] = {}
+    try:
+        res["prompt_json"] = json.loads(res.get("prompt_json", "{}"))
+    except Exception:
+        res["prompt_json"] = {}
+    return res
