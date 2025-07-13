@@ -13,10 +13,29 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
+import re
 
 # `tutor_schema.py` lives in the repository root. Import it directly so the
 # application does not depend on a `tutor` package being installed.
 from tutor_schema import TutorRequest
+
+
+def _combine_asr_chunks(chunks: Any) -> str:
+    """Return a clean sentence from wav2vec2_asr chunks."""
+    if not chunks:
+        return ""
+    if isinstance(chunks, str):
+        return chunks
+    if isinstance(chunks, list):
+        text = " ".join(str(c.get("transcript", "")) for c in chunks)
+    else:
+        try:
+            text = str(chunks)
+        except Exception:
+            text = ""
+    # remove space before punctuation
+    text = re.sub(r"\s+([.,!?])", r"\1", text)
+    return text.strip()
 
 
 def _load_system_prompt(path: str | Path) -> str:
@@ -44,7 +63,7 @@ def build(results: Dict[str, Any],
             "pronunciation": results.get("azure_pronunciation")
         },
         wav2vec2={
-            "asr": results.get("wav2vec2_asr"),
+            "asr": _combine_asr_chunks(results.get("wav2vec2_asr")),
             "phonemes": results.get("wav2vec2_phonemes")
         },
         timestamp=datetime.utcnow(),
