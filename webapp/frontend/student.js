@@ -12,6 +12,8 @@ let studentName = null;
 let lastFeedbackAudio = null;
 let recordedChunks = [];
 let playbackUrl = null;
+let pendingChunks = [];
+let startPromise = null;
 
 const statusEl = document.getElementById('status');
 const sentenceEl = document.getElementById('sentence');
@@ -94,15 +96,30 @@ recordBtn.onclick = async () => {
   fd.append('sample_rate', audioCtx.sampleRate);
   fd.append('teacher_id', teacherId);
   fd.append('student_id', studentId);
-  const r = await fetch('/api/realtime/start', {method:'POST', body: fd});
-  const j = await r.json();
-  if(!r.ok){
-    statusEl.textContent = 'Fout: ' + j.detail;
-    return;
-  }
-  sessionId = j.session_id;
-  fillerAudio = j.filler_audio;
-  delaySeconds = j.delay_seconds;
+
+  pendingChunks = [];
+  startPromise = fetch('/api/realtime/start', {method:'POST', body: fd})
+    .then(async r => {
+      const j = await r.json();
+      if(!r.ok){
+        throw new Error(j.detail);
+      }
+      sessionId = j.session_id;
+      fillerAudio = j.filler_audio;
+      delaySeconds = j.delay_seconds;
+      for(const blob of pendingChunks){
+        const f = new FormData();
+        f.append('file', blob, 'chunk.pcm');
+        fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
+      }
+      pendingChunks = [];
+    })
+    .catch(err => {
+      statusEl.textContent = 'Fout: ' + err.message;
+      recording = false;
+    })
+    .finally(() => { startPromise = null; });
+
   const source = audioCtx.createMediaStreamSource(stream);
   processor = audioCtx.createScriptProcessor(4096,1,1);
   source.connect(processor);
@@ -117,9 +134,13 @@ recordBtn.onclick = async () => {
     }
     recordedChunks.push(pcm);
     const blob = new Blob([pcm], {type:'application/octet-stream'});
-    const f = new FormData();
-    f.append('file', blob, 'chunk.pcm');
-    fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
+    if(sessionId){
+      const f = new FormData();
+      f.append('file', blob, 'chunk.pcm');
+      fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
+    } else {
+      pendingChunks.push(blob);
+    }
   };
   recordedChunks = [];
   playbackUrl && URL.revokeObjectURL(playbackUrl);
@@ -138,6 +159,15 @@ stopBtn.onclick = async () => {
   stream.getTracks().forEach(t => t.stop());
   stopBtn.disabled = true;
   statusEl.innerHTML = '<span class="spinner"></span>Analyseren';
+
+  if(startPromise){
+    try {
+      await startPromise;
+    } catch(err) {
+      // start failed, nothing to stop
+      return;
+    }
+  }
 
   const stopPromise = fetch('/api/realtime/stop/' + sessionId, { method: 'POST' })
     .then(async r => {
