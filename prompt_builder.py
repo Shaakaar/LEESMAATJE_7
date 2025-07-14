@@ -14,6 +14,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 import re
+import string
+
+PUNCT_TRANS = str.maketrans('', '', string.punctuation)
+
+
+def _strip_punctuation(text: str) -> str:
+    if not isinstance(text, str):
+        return ''
+    return text.translate(PUNCT_TRANS)
 
 # `tutor_schema.py` lives in the repository root. Import it directly so the
 # application does not depend on a `tutor` package being installed.
@@ -25,7 +34,7 @@ def _combine_asr_chunks(chunks: Any) -> str:
     if not chunks:
         return ""
     if isinstance(chunks, str):
-        return chunks
+        return _strip_punctuation(chunks)
     if isinstance(chunks, list):
         text = " ".join(str(c.get("transcript", "")) for c in chunks)
     else:
@@ -35,7 +44,7 @@ def _combine_asr_chunks(chunks: Any) -> str:
             text = ""
     # remove space before punctuation
     text = re.sub(r"\s+([.,!?])", r"\1", text)
-    return text.strip()
+    return _strip_punctuation(text.strip())
 
 
 def _load_system_prompt(path: str | Path) -> str:
@@ -53,21 +62,35 @@ def build(results: Dict[str, Any],
     """
     sentence_id = results["session_id"]  # reuse until you add per-sentence IDs
 
+    azure_plain = results.get("azure_plain")
+    if isinstance(azure_plain, dict):
+        ft = azure_plain.get("final_transcript")
+        if isinstance(ft, str):
+            azure_plain = azure_plain.copy()
+            azure_plain["final_transcript"] = _strip_punctuation(ft)
+
+    azure_pron = results.get("azure_pronunciation")
+    if isinstance(azure_pron, dict):
+        ft = azure_pron.get("final_transcript")
+        if isinstance(ft, str):
+            azure_pron = azure_pron.copy()
+            azure_pron["final_transcript"] = _strip_punctuation(ft)
+
     req = TutorRequest(
         session_id=results["session_id"],
         sentence_id=sentence_id,
-        reference_text=results.get("reference_text", ""), #supply this when recording 
-        reference_phonemes=results.get("reference_phonemes", {}),  
+        reference_text=results.get("reference_text", ""),
+        reference_phonemes=results.get("reference_phonemes", {}),
         azure={
-            "plain": results.get("azure_plain"),
-            "pronunciation": results.get("azure_pronunciation")
+            "plain": azure_plain,
+            "pronunciation": azure_pron
         },
         wav2vec2={
             "asr": _combine_asr_chunks(results.get("wav2vec2_asr")),
             "phonemes": results.get("wav2vec2_phonemes")
         },
         timestamp=datetime.utcnow(),
-        history=state.get("history") if state else None
+        history=state.get("history") if state else None,
     )
 
     # ── Build messages
