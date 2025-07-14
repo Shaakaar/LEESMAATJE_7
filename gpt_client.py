@@ -25,6 +25,7 @@ load_dotenv()
 # ------------------------------------------------------------------ config
 OPENAI_MODEL = os.getenv("GPT_TUTOR_MODEL", "gpt-4o-mini")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_TEMPERATURE = float(os.getenv("GPT_TUTOR_TEMPERATURE", "0.3"))
 ENDPOINT = "https://api.openai.com/v1/chat/completions"
 TIMEOUT_S = 15.0
 
@@ -41,7 +42,7 @@ async def chat(messages: List[Dict[str, str]],
     payload: Dict[str, Any] = {
         "model": OPENAI_MODEL,
         "messages": messages,
-        "temperature": 0.3,
+        "temperature": OPENAI_TEMPERATURE,
         "response_format": {"type": "json_object"}
     }
 

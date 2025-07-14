@@ -11,6 +11,9 @@ streamed to the server in realtime while recording so analysis can start
 immediately. Once recording stops the backend finalizes the analysis and
 returns GPT feedback.
 
+The temperature for GPT feedback can be configured via `GPT_TUTOR_TEMPERATURE`
+in `backend/config.py`. The default is `0.0` for deterministic answers.
+
 ## Running
 
 ```bash
