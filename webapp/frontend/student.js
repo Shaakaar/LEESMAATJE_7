@@ -14,6 +14,8 @@ let recordedChunks = [];
 let playbackUrl = null;
 let pendingChunks = [];
 let startPromise = null;
+let analyser;
+let dataArray;
 
 const statusEl = document.getElementById('status');
 const sentenceEl = document.getElementById('sentence');
@@ -23,6 +25,9 @@ const replayBtn = feedbackModule.querySelector('.replay-btn');
 const progressBar = document.getElementById('progress_bar');
 const progressText = document.getElementById('progress_text');
 const micBtn = document.getElementById('mic');
+const micWrapper = document.querySelector('.mic-wrapper');
+const waveCanvas = document.getElementById('mic_waveform');
+const waveCtx = waveCanvas.getContext('2d');
 const playbackBtn = document.getElementById('playback');
 const retryBtn = document.getElementById('retry');
 const nextBtn = document.getElementById('next');
@@ -116,12 +121,17 @@ async function startRecording(){
     .catch(err => {
       statusEl.textContent = 'Fout: ' + err.message;
       recording = false;
+      stopVisualizer();
     })
     .finally(() => { startPromise = null; });
 
   const source = audioCtx.createMediaStreamSource(stream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  dataArray = new Uint8Array(analyser.fftSize);
   processor = audioCtx.createScriptProcessor(4096,1,1);
-  source.connect(processor);
+  source.connect(analyser);
+  analyser.connect(processor);
   processor.connect(audioCtx.destination);
   processor.onaudioprocess = e => {
     if(!recording) return;
@@ -145,6 +155,7 @@ async function startRecording(){
   playbackUrl && URL.revokeObjectURL(playbackUrl);
   playbackUrl = null;
   recording = true;
+  startVisualizer();
   micBtn.classList.add('active');
   micBtn.querySelector('.label').textContent = 'Luisteren...';
   retryBtn.disabled = true;
@@ -163,6 +174,7 @@ micBtn.onclick = () => {
 
 async function stopRecording(){
   recording = false;
+  stopVisualizer();
   processor.disconnect();
   stream.getTracks().forEach(t => t.stop());
   micBtn.disabled = true;
@@ -244,6 +256,42 @@ function encodeWav(samples, sampleRate){
   view.setUint32(40,samples.length*2,true);
   for(let i=0;i<samples.length;i++) view.setInt16(44+i*2,samples[i],true);
   return new Blob([view],{type:'audio/wav'});
+}
+
+function drawWave(level){
+  const w = waveCanvas.width;
+  const h = waveCanvas.height;
+  waveCtx.clearRect(0,0,w,h);
+  const base = w/2 - 25;
+  const radius = base + level * 25;
+  waveCtx.beginPath();
+  waveCtx.arc(w/2, h/2, radius, 0, Math.PI*2);
+  waveCtx.strokeStyle = 'rgba(79,140,255,0.8)';
+  waveCtx.lineWidth = 4;
+  waveCtx.stroke();
+}
+
+function visualize(){
+  if(!recording) return;
+  analyser.getByteTimeDomainData(dataArray);
+  let sum = 0;
+  for(let i=0;i<dataArray.length;i++){
+    const val = dataArray[i] - 128;
+    sum += val*val;
+  }
+  const rms = Math.sqrt(sum/dataArray.length)/128;
+  drawWave(rms);
+  requestAnimationFrame(visualize);
+}
+
+function startVisualizer(){
+  micWrapper.classList.add('recording');
+  visualize();
+}
+
+function stopVisualizer(){
+  micWrapper.classList.remove('recording');
+  waveCtx.clearRect(0,0,waveCanvas.width,waveCanvas.height);
 }
 
 function showFeedback(data){
