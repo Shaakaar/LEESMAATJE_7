@@ -76,10 +76,14 @@ def build(results: Dict[str, Any],
             azure_pron = azure_pron.copy()
             azure_pron["final_transcript"] = _strip_punctuation(ft)
 
+    ref_text = results.get("reference_text", "")
+    if isinstance(ref_text, str):
+        ref_text = _strip_punctuation(ref_text)
+
     req = TutorRequest(
         session_id=results["session_id"],
         sentence_id=sentence_id,
-        reference_text=results.get("reference_text", ""),
+        reference_text=ref_text,
         reference_phonemes=results.get("reference_phonemes", {}),
         azure={
             "plain": azure_plain,
