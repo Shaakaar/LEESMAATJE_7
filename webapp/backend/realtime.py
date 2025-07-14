@@ -121,6 +121,7 @@ class RealtimeSession:
 
         self.results["end_time"] = time.time()
         req, _ = prompt_builder.build(self.results, state={})
+        json_str = req.model_dump_json(indent=2)
         console.rule("[bold green]JSON Request[/bold green]")
-        console.print_json(data=req.model_dump_json())
+        console.print_json(json_str)
         return self.results
