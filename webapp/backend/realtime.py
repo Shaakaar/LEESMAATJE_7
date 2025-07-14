@@ -120,7 +120,9 @@ class RealtimeSession:
         self.wavefile.close()
 
         self.results["end_time"] = time.time()
-        req, _ = prompt_builder.build(self.results, state={})
+        req, messages = prompt_builder.build(self.results, state={})
+        console.rule("[bold green]System Prompt[/bold green]")
+        console.print(messages[0]["content"])
         json_str = req.model_dump_json(indent=2)
         console.rule("[bold green]JSON Request[/bold green]")
         console.print_json(json_str)
