@@ -22,7 +22,7 @@ PUNCT_TRANS = str.maketrans('', '', string.punctuation)
 def _strip_punctuation(text: str) -> str:
     if not isinstance(text, str):
         return ''
-    return text.translate(PUNCT_TRANS)
+    return text.translate(PUNCT_TRANS).lower()
 
 # `tutor_schema.py` lives in the repository root. Import it directly so the
 # application does not depend on a `tutor` package being installed.
