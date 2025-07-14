@@ -36,7 +36,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "../frontend")), name="static")
+# Directory containing the frontend files that are served statically
+frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend")
+
+# Serve the main frontend assets
+app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+# Serve the bundled Lucide icon font
+app.mount(
+    "/static/lucide",
+    StaticFiles(directory=os.path.join(frontend_dir, "lucide")),
+    name="lucide",
+)
 
 sent_index = 0
 models_ready = False
