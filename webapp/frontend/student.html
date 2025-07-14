@@ -23,10 +23,13 @@
     <div id="progress_text" class="progress-text"></div>
     <div id="status"></div>
     <div class="mic-container">
-      <button id="mic" class="mic-btn" aria-label="Opnemen">
-        <i class="lucide lucide-mic"></i>
-        <span class="label">Opnemen</span>
-      </button>
+      <div class="mic-wrapper">
+        <canvas id="mic_waveform" width="150" height="150" aria-hidden="true"></canvas>
+        <button id="mic" class="mic-btn" aria-label="Opnemen">
+          <i class="lucide lucide-mic"></i>
+          <span class="label">Opnemen</span>
+        </button>
+      </div>
     </div>
     <div class="btn-row">
       <button id="playback" disabled>
