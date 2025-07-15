@@ -8,7 +8,7 @@ from typing import Dict, Any
 
 import numpy as np
 
-from FASE2_audio import audio_q
+from FASE2_audio import audio_q, flush_audio_queue
 from FASE2_wav2vec2_process import Wav2Vec2PhonemeExtractor, Wav2Vec2Transcriber
 from FASE2_azure_process import AzurePronunciationEvaluator, AzurePlainTranscriber
 from rich.console import Console
@@ -22,6 +22,7 @@ class RealtimeSession:
     """Manage realtime audio analysis for one sentence."""
 
     def __init__(self, sentence: str, sample_rate: int = 16000, *, filler_audio: str | None = None, teacher_id: int = 0, student_id: int = 0):
+        flush_audio_queue()
         self.id = str(uuid.uuid4())
         self.sentence = sentence
         self.sample_rate = sample_rate
@@ -94,6 +95,8 @@ class RealtimeSession:
 
     def stop(self) -> Dict[str, Any]:
         """Finalize processing and return results."""
+        # Allow final chunks to arrive before signaling end-of-stream
+        time.sleep(0.5)
         audio_q.put(None)
         if self.phon_thread.realtime:
             self.phon_thread.stop()
@@ -118,6 +121,7 @@ class RealtimeSession:
             self.azure_plain.process_file(self.wav_path)
 
         self.wavefile.close()
+        flush_audio_queue()
 
         self.results["end_time"] = time.time()
         req, messages = prompt_builder.build(self.results, state={})

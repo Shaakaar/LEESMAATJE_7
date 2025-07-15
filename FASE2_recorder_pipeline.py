@@ -22,7 +22,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 # Existing engine modules
-from FASE2_audio import AudioRecorder, audio_q          # sentinel already handled
+from FASE2_audio import AudioRecorder, audio_q, flush_audio_queue          # sentinel already handled
 from FASE2_wav2vec2_process import (
     Wav2Vec2PhonemeExtractor,
     Wav2Vec2Transcriber,
@@ -108,6 +108,7 @@ class RecorderPipeline:
         """
         session_id = str(uuid.uuid4())
         start_time_iso = datetime.now(timezone.utc).isoformat()
+        flush_audio_queue()
         # ---------- shared results dict ----------------------------------
         results: Dict[str, Any] = {
             "session_id": session_id,
