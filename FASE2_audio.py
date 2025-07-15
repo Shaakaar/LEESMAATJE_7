@@ -16,14 +16,16 @@ from rich.text import Text
 #─── Global console ─────────────────────────────────────────────────────────────
 console = Console()
 
-# Shared queue for raw PCM frames
+# Shared queue for raw PCM frames (used as default)
 audio_q = queue.Queue()
 
-def flush_audio_queue():
-    """Remove all pending items from :data:`audio_q`."""
-    while not audio_q.empty():
+def flush_audio_queue(q: queue.Queue = None):
+    """Remove all pending items from the provided queue."""
+    if q is None:
+        q = audio_q
+    while not q.empty():
         try:
-            audio_q.get_nowait()
+            q.get_nowait()
         except queue.Empty:
             break
 
@@ -42,6 +44,8 @@ class AudioRecorder:
         use_vad: bool = False,
         vad_aggressiveness: int = 2,
         silence_timeout_s: float = 1.0,
+        *,
+        audio_queue: queue.Queue = audio_q,
     ):
         """
         Args:
@@ -58,6 +62,7 @@ class AudioRecorder:
         self.block_size = int(sample_rate * block_duration_ms / 1000)
         self.use_vad = use_vad
         self.silence_timeout_s = silence_timeout_s
+        self.audio_q = audio_queue
 
         if use_vad:
             self.vad = webrtcvad.Vad(vad_aggressiveness)
@@ -91,7 +96,7 @@ class AudioRecorder:
         pcm = (indata[:, 0] * 32767).astype(np.int16)
 
         # Enqueue for downstream consumers
-        audio_q.put(pcm)
+        self.audio_q.put(pcm)
 
         # Write to WAV file
         if self.wavefile:
@@ -165,7 +170,7 @@ class AudioRecorder:
             self.wavefile = None
 
         time.sleep(0.05)      # optional but robust
-        audio_q.put(None)     # <-- NEW sentinel
+        self.audio_q.put(None)     # <-- NEW sentinel
 
         console.print("[red]■ Recording stopped.[/red]\n")
 
