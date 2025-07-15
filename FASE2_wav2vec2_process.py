@@ -48,7 +48,7 @@ def _load_asr_model(device: str):
 class Wav2Vec2PhonemeExtractor(threading.Thread):
     """Extracts Dutch phonemes in either real‑time or offline mode."""
 
-    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True):
+    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True, *, audio_queue: queue.Queue = audio_q):
         super().__init__(daemon=True)
         self.realtime = realtime
         self.sample_rate = sample_rate
@@ -56,6 +56,7 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         self.chunk_size = int(sample_rate * chunk_duration)
         self.buffer = np.zeros((0,), dtype=np.int16)
         self.running = True
+        self.audio_q = audio_queue
 
         # Reference to shared results dict:
         self.results = results
@@ -87,7 +88,7 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         # ─────────────── Phase 1: Normal processing ───────────────
         while self.running:
             try:
-                pcm_frames = audio_q.get(timeout=1.0)
+                pcm_frames = self.audio_q.get(timeout=1.0)
                 # Sentinel value None means end-of-stream
                 if pcm_frames is None:
                     break
@@ -211,7 +212,7 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
 class Wav2Vec2Transcriber(threading.Thread):
     """Streams Dutch ASR text in real‑time or processes a file offline."""
 
-    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True):
+    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True, *, audio_queue: queue.Queue = audio_q):
         super().__init__(daemon=True)
         self.realtime = realtime
         self.sample_rate = sample_rate
@@ -219,6 +220,7 @@ class Wav2Vec2Transcriber(threading.Thread):
         self.chunk_size = int(sample_rate * chunk_duration)
         self.buffer = np.zeros((0,), dtype=np.int16)
         self.running = True
+        self.audio_q = audio_queue
 
         self.results = results
         if self.results is not None:
@@ -250,7 +252,7 @@ class Wav2Vec2Transcriber(threading.Thread):
         # ─────────────── Phase 1: Normal processing ───────────────
         while self.running:
             try:
-                pcm_frames = audio_q.get(timeout=1.0)
+                pcm_frames = self.audio_q.get(timeout=1.0)
                 # Sentinel value None means end-of-stream
                 if pcm_frames is None:
                     break
