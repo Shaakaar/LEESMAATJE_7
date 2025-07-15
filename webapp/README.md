@@ -11,8 +11,12 @@ streamed to the server in realtime while recording so analysis can start
 immediately. Once recording stops the backend finalizes the analysis and
 returns GPT feedback.
 
-The temperature for GPT feedback can be configured via `GPT_TUTOR_TEMPERATURE`
-in `backend/config.py`. The default is `0.0` for deterministic answers.
+The GPT model and temperature used for feedback can be configured in
+`backend/config.py` via the `GPT_MODEL` and `GPT_TEMPERATURE` constants.  These
+values can also be provided through the environment variables
+`GPT_TUTOR_MODEL` and `GPT_TUTOR_TEMPERATURE`.  The default model is
+`"gpt-4o-mini"` and the default temperature is `0.0` for deterministic
+answers.
 
 ## Running
 
