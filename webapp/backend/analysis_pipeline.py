@@ -10,6 +10,7 @@ from typing import Dict, Any
 import soundfile as sf
 import resampy
 from phonemizer import phonemize
+from prompt_builder import _strip_punctuation
 
 from FASE2_azure_process import AzurePronunciationEvaluator, AzurePlainTranscriber
 from FASE2_wav2vec2_process import Wav2Vec2PhonemeExtractor, Wav2Vec2Transcriber
@@ -17,6 +18,8 @@ from . import config
 
 
 def _ref_ph_map(text: str) -> Dict[str, str]:
+    """Return phoneme mapping for whitespace-separated words."""
+    clean_text = _strip_punctuation(text)
     return {
         w: phonemize(
             w,
@@ -26,7 +29,7 @@ def _ref_ph_map(text: str) -> Dict[str, str]:
             preserve_punctuation=True,
             with_stress=False,
         )
-        for w in text.split()
+        for w in clean_text.split()
     }
 
 
