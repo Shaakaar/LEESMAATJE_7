@@ -6,6 +6,8 @@ response conforms to TutorResponse.
 
 Env vars required:
     OPENAI_API_KEY
+    GPT_TUTOR_MODEL (optional, defaults to "gpt-4o-mini")
+    GPT_TUTOR_TEMPERATURE (optional)
 """
 
 from __future__ import annotations

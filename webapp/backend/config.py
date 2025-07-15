@@ -39,6 +39,7 @@ GPT_MODEL = os.getenv("GPT_TUTOR_MODEL", "gpt-4o-mini")
 # Temperature for GPT feedback (0 for deterministic output)
 GPT_TEMPERATURE = float(os.getenv("GPT_TUTOR_TEMPERATURE", "0.0"))
 
-# Ensure the environment variable is set so gpt_client can pick it up
+# Ensure the environment variables are set so gpt_client can pick them up
+os.environ.setdefault("GPT_TUTOR_MODEL", GPT_MODEL)
 os.environ.setdefault("GPT_TUTOR_TEMPERATURE", str(GPT_TEMPERATURE))
 
