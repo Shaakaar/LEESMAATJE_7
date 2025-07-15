@@ -19,6 +19,14 @@ console = Console()
 # Shared queue for raw PCM frames
 audio_q = queue.Queue()
 
+def flush_audio_queue():
+    """Remove all pending items from :data:`audio_q`."""
+    while not audio_q.empty():
+        try:
+            audio_q.get_nowait()
+        except queue.Empty:
+            break
+
 
 class AudioRecorder:
     """
