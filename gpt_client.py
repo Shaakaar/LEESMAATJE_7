@@ -36,7 +36,7 @@ load_dotenv()
 
 # ------------------------------------------------------------------ config
 PROVIDER = os.getenv("GPT_TUTOR_PROVIDER", "openai").lower()
-OPENAI_MODEL = os.getenv("GPT_TUTOR_MODEL", "gpt-4o-mini")
+OPENAI_MODEL = os.getenv("GPT_TUTOR_MODEL", "gpt-4o")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_TEMPERATURE = float(os.getenv("GPT_TUTOR_TEMPERATURE", "0.3"))
 
@@ -46,7 +46,9 @@ AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 AZURE_OPENAI_VERSION = os.getenv("AZURE_OPENAI_VERSION", "2024-05-13")
 
 ENDPOINT = "https://api.openai.com/v1/chat/completions"
-TIMEOUT_S = 15.0
+TIMEOUT_S = 200.0
+
+TEMPERATURE_MODELS = {"gpt-4o", "gpt-4o-mini", "gpt-4.1"}
 
 
 class GPTClientError(Exception):
@@ -77,9 +79,10 @@ async def chat(messages: List[Dict[str, str]],
 
         payload: Dict[str, Any] = {
             "messages": messages,
-            "temperature": OPENAI_TEMPERATURE,
             "response_format": {"type": "json_object"},
         }
+        if OPENAI_MODEL in TEMPERATURE_MODELS:
+            payload["temperature"] = OPENAI_TEMPERATURE
 
         headers = {
             "api-key": AZURE_OPENAI_KEY,
@@ -94,9 +97,10 @@ async def chat(messages: List[Dict[str, str]],
         payload = {
             "model": OPENAI_MODEL,
             "messages": messages,
-            "temperature": OPENAI_TEMPERATURE,
             "response_format": {"type": "json_object"},
         }
+        if OPENAI_MODEL in TEMPERATURE_MODELS:
+            payload["temperature"] = OPENAI_TEMPERATURE
 
         headers = {
             "Authorization": f"Bearer {OPENAI_API_KEY}",
