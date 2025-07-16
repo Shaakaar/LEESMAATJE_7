@@ -37,6 +37,11 @@ class TutorRequest(BaseModel):
 # ──────────────────────────────────────────────────────────────────────────
 #  Outbound: what GPT must return
 # ──────────────────────────────────────────────────────────────────────────
+class LetterError(BaseModel):
+    letters: str
+    phonemes: str
+
+
 class ErrorItem(BaseModel):
     # Accept both "word" (old) and "expected_word" (new)
     expected_word: str | None = Field(default=None, alias="word")
@@ -44,6 +49,7 @@ class ErrorItem(BaseModel):
 
     expected_phonemes: str
     heard_phonemes: str
+    letter_errors: List[LetterError] = Field(default_factory=list)
     issue: str | None = None
 
     model_config = {
