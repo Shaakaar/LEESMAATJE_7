@@ -4,6 +4,7 @@ import openai
 from . import config
 
 openai.api_key = openai.api_key or None  # use env var
+openai.api_type = "openai"  # TTS should always use the standard OpenAI API
 
 
 def tts_to_file(text: str, stream: bool = False) -> str:
