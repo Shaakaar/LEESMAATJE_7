@@ -14,7 +14,49 @@
     <button id="logout" class="accent">Uitloggen</button>
   </div>
   <div class="ui-pane">
-    <div id="story"></div>
+    <label for="sentence" class="sentence-label">Zin om te lezen:</label>
+    <div id="sentence" class="card"></div>
+    <div class="progress">
+      <div id="progress_bar" class="progress-bar"></div>
+    </div>
+    <div id="progress_text" class="progress-text"></div>
+    <div id="status"></div>
+    <div class="mic-container">
+      <div class="mic-wrapper">
+        <canvas id="mic_waveform" width="150" height="150" aria-hidden="true"></canvas>
+        <button id="mic" class="mic-btn" aria-label="Opnemen">
+          <i class="lucide lucide-mic"></i>
+          <span class="label">Opnemen</span>
+        </button>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button id="playback" disabled>
+        <i class="lucide lucide-play-circle"></i>
+        <span class="label">Afspelen</span>
+      </button>
+    </div>
+    <div class="btn-row">
+      <button id="prev" disabled>
+        <i class="lucide lucide-chevron-left"></i>
+        <span class="label">Vorige zin</span>
+      </button>
+      <button id="retry" disabled>
+        <i class="lucide lucide-rotate-ccw"></i>
+        <span class="label">Opnieuw</span>
+      </button>
+      <button id="next">
+        <i class="lucide lucide-chevron-right"></i>
+        <span class="label">Volgende zin</span>
+      </button>
+    </div>
+
+    <div class="feedback" aria-live="polite">
+      <p class="text">Goed uitgesproken! Ga zo door.</p>
+      <button class="replay-btn" aria-label="Speel feedback opnieuw af">
+        <i class="lucide lucide-volume-2"></i>
+      </button>
+    </div>
   </div>
   <script src="/static/story.js"></script>
 </body>
