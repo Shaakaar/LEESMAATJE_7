@@ -1,14 +1,16 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from sse_starlette.sse import EventSourceResponse
+import json
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-import asyncio
 import os
 import tempfile
 import shutil
 import sqlite3
 
 from . import config, storage
+
 # Heavy dependencies such as the analysis pipeline, text to speech and
 # realtime processing pull in a number of third party libraries.  Importing
 # them at module import time means the whole application fails to start when
@@ -24,7 +26,7 @@ import gpt_client
 # `sessions` will map realtime session ids to RealtimeSession objects.  The
 # class itself is imported lazily in `realtime_start` to avoid importing heavy
 # dependencies when they are not installed.
-sessions: dict[str, "RealtimeSession"] = {}
+sessions: dict[str, object] = {}
 
 app = FastAPI()
 storage.init_db()
@@ -112,6 +114,7 @@ async def initialize_models():
     global models_ready
     # Trigger lazy loading of wav2vec2 models
     from FASE2_wav2vec2_process import _load_asr_model, _load_phoneme_model
+
     _load_asr_model("cpu")
     _load_phoneme_model("cpu")
     models_ready = True
@@ -171,7 +174,12 @@ async def get_result(res_id: str):
 
 
 @app.post("/api/process")
-async def process(sentence: str = Form(...), file: UploadFile = File(...), teacher_id: int = Form(1), student_id: int = Form(0)):
+async def process(
+    sentence: str = Form(...),
+    file: UploadFile = File(...),
+    teacher_id: int = Form(1),
+    student_id: int = Form(0),
+):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
     wav_bytes = await file.read()
@@ -200,13 +208,15 @@ async def process(sentence: str = Form(...), file: UploadFile = File(...), teach
         req.model_dump_json(),
     )
 
-    return JSONResponse({
-        "feedback_text": tutor_resp.feedback_text,
-        "filler_audio": os.path.basename(filler_audio),
-        "feedback_audio": os.path.basename(feedback_audio),
-        "correct": tutor_resp.is_correct,
-        "delay_seconds": config.DELAY_SECONDS,
-    })
+    return JSONResponse(
+        {
+            "feedback_text": tutor_resp.feedback_text,
+            "filler_audio": os.path.basename(filler_audio),
+            "feedback_audio": os.path.basename(feedback_audio),
+            "correct": tutor_resp.is_correct,
+            "delay_seconds": config.DELAY_SECONDS,
+        }
+    )
 
 
 @app.get("/api/audio/{name}")
@@ -221,7 +231,12 @@ async def get_audio(name: str):
 
 
 @app.post("/api/realtime/start")
-async def realtime_start(sentence: str = Form(...), sample_rate: int = Form(16000), teacher_id: int = Form(1), student_id: int = Form(0)):
+async def realtime_start(
+    sentence: str = Form(...),
+    sample_rate: int = Form(16000),
+    teacher_id: int = Form(1),
+    student_id: int = Form(0),
+):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
     # Import heavy modules lazily
@@ -230,8 +245,13 @@ async def realtime_start(sentence: str = Form(...), sample_rate: int = Form(1600
 
     filler_text = f"De zin was {sentence}"
     filler_audio = tts_to_file(filler_text)
-    sess = RealtimeSession(sentence, sample_rate, filler_audio=filler_audio,
-                           teacher_id=teacher_id, student_id=student_id)
+    sess = RealtimeSession(
+        sentence,
+        sample_rate,
+        filler_audio=filler_audio,
+        teacher_id=teacher_id,
+        student_id=student_id,
+    )
     sessions[sess.id] = sess
     return {
         "session_id": sess.id,
@@ -259,6 +279,7 @@ async def realtime_stop(sid: str):
     req, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
     from .tts import tts_to_file
+
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
 
     results["correct"] = tutor_resp.is_correct
@@ -272,10 +293,67 @@ async def realtime_stop(sid: str):
         str(dest_audio),
         req.model_dump_json(),
     )
-    return JSONResponse({
-        "feedback_text": tutor_resp.feedback_text,
-        "filler_audio": os.path.basename(sess.filler_audio) if sess.filler_audio else None,
-        "feedback_audio": os.path.basename(feedback_audio),
-        "correct": tutor_resp.is_correct,
-        "delay_seconds": config.DELAY_SECONDS,
-    })
+    return JSONResponse(
+        {
+            "feedback_text": tutor_resp.feedback_text,
+            "filler_audio": (
+                os.path.basename(sess.filler_audio) if sess.filler_audio else None
+            ),
+            "feedback_audio": os.path.basename(feedback_audio),
+            "correct": tutor_resp.is_correct,
+            "delay_seconds": config.DELAY_SECONDS,
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# New endpoints for the interactive story feature
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/start_story")
+async def start_story(theme: str, level: str):
+    """Pre-generate TTS audio for the first story section.
+
+    Returns events in Server Sent Event format to report progress.
+    """
+    story = config.STORIES.get(theme, {}).get(level)
+    if not story:
+        raise HTTPException(status_code=400, detail="Story not found")
+
+    from .tts import tts_to_file
+
+    async def event_stream():
+        total = len(story["section1"]) + len(story["directions"])
+        done = 0
+        for sent in story["section1"]:
+            audio = tts_to_file(sent)
+            word_audios = [os.path.basename(tts_to_file(w)) for w in sent.split()]
+            yield {
+                "event": "sentence",
+                "data": json.dumps(
+                    {
+                        "text": sent,
+                        "audio": os.path.basename(audio),
+                        "words": word_audios,
+                    }
+                ),
+            }
+            done += 1
+            yield {"event": "progress", "data": str(done / total)}
+        for direc in story["directions"]:
+            audio = tts_to_file(direc)
+            yield {
+                "event": "direction",
+                "data": json.dumps(
+                    {
+                        "text": direc,
+                        "audio": os.path.basename(audio),
+                    }
+                ),
+            }
+            done += 1
+            yield {"event": "progress", "data": str(done / total)}
+        yield {"event": "complete", "data": "ok"}
+
+    return EventSourceResponse(event_stream())

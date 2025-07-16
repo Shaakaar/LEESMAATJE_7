@@ -11,6 +11,26 @@ SENTENCES = [
     "Ik eet een appel.",
 ]
 
+# Sample interactive stories used by the webapp. Each theme contains multiple
+# levels. For now only a single theme/level is provided as an example.
+STORIES = {
+    "animals": {
+        "easy": {
+            "section1": [
+                "De kat zit op het dak.",
+                "De hond blaft naar de kip.",
+                "Een koe staat in het veld.",
+                "Het paard rent in de wei.",
+                "De vogel zingt mooi.",
+            ],
+            "directions": [
+                "Wil je naar de boerderij?",
+                "Wil je naar het bos?",
+            ],
+        }
+    }
+}
+
 # Voice configuration for TTS
 VOICE_MODEL = "gpt-4o-mini-tts"
 VOICE_NAME = "nova"
@@ -44,4 +64,3 @@ GPT_TEMPERATURE = float(os.getenv("GPT_TUTOR_TEMPERATURE", "0.0"))
 os.environ.setdefault("GPT_TUTOR_PROVIDER", GPT_PROVIDER)
 os.environ.setdefault("GPT_TUTOR_MODEL", GPT_MODEL)
 os.environ.setdefault("GPT_TUTOR_TEMPERATURE", str(GPT_TEMPERATURE))
-
