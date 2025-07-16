@@ -11,12 +11,16 @@ streamed to the server in realtime while recording so analysis can start
 immediately. Once recording stops the backend finalizes the analysis and
 returns GPT feedback.
 
-The GPT model and temperature used for feedback can be configured in
-`backend/config.py` via the `GPT_MODEL` and `GPT_TEMPERATURE` constants.  These
-values can also be provided through the environment variables
-`GPT_TUTOR_MODEL` and `GPT_TUTOR_TEMPERATURE`.  The default model is
-`"gpt-4o-mini"` and the default temperature is `0.0` for deterministic
-answers.
+The GPT provider, model and temperature used for feedback can be
+configured in `backend/config.py` via the `GPT_PROVIDER`, `GPT_MODEL`
+and `GPT_TEMPERATURE` constants.  These values can also be provided
+through the environment variables `GPT_TUTOR_PROVIDER`,
+`GPT_TUTOR_MODEL` and `GPT_TUTOR_TEMPERATURE`.  The default provider is
+`"openai"`, the default model is `"gpt-4o-mini"` and the default
+temperature is `0.0` for deterministic answers.  When `GPT_PROVIDER` is
+set to `"azure"` the environment variables `AZURE_OPENAI_ENDPOINT`,
+`AZURE_OPENAI_KEY` and `AZURE_OPENAI_DEPLOYMENT` must also be set to
+point to your Azure OpenAI deployment.
 
 ## Running
 
