@@ -35,11 +35,13 @@ PARALLEL_OFFLINE = True
 CHUNK_DURATION = 10
 
 # GPT model settings
+GPT_PROVIDER = os.getenv("GPT_TUTOR_PROVIDER", "openai")
 GPT_MODEL = os.getenv("GPT_TUTOR_MODEL", "gpt-4o-mini")
 # Temperature for GPT feedback (0 for deterministic output)
 GPT_TEMPERATURE = float(os.getenv("GPT_TUTOR_TEMPERATURE", "0.0"))
 
 # Ensure the environment variables are set so gpt_client can pick them up
+os.environ.setdefault("GPT_TUTOR_PROVIDER", GPT_PROVIDER)
 os.environ.setdefault("GPT_TUTOR_MODEL", GPT_MODEL)
 os.environ.setdefault("GPT_TUTOR_TEMPERATURE", str(GPT_TEMPERATURE))
 
