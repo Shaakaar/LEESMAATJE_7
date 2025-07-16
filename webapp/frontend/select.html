@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leesmaatje Thema</title>
+  <link rel="stylesheet" href="/static/lucide/lucide.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="top-bar">
+    <h1>Leesmaatje</h1>
+    <span id="student_name"></span>
+    <button id="logout" class="accent">Uitloggen</button>
+  </div>
+  <div class="ui-pane">
+    <label for="theme">Kies thema:</label>
+    <select id="theme">
+      <option value="animals">Dieren</option>
+    </select>
+    <label for="level">Kies niveau:</label>
+    <select id="level">
+      <option value="easy">Makkelijk</option>
+    </select>
+    <button id="start" class="primary">Start</button>
+    <div class="progress">
+      <div id="load_bar" class="progress-bar"></div>
+    </div>
+  </div>
+  <script src="/static/select.js"></script>
+</body>
+</html>

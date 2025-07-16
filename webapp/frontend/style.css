@@ -376,3 +376,17 @@ button.accent {
   from { opacity:1; }
   to { opacity:0; }
 }
+
+.word {
+  cursor: pointer;
+}
+.word:hover {
+  color: var(--primary);
+}
+.play-sent {
+  background:none;
+  border:none;
+  cursor:pointer;
+  vertical-align:middle;
+  margin-left:0.5rem;
+}

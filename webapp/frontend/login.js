@@ -81,7 +81,7 @@ document.getElementById('stu_login').onclick = async () => {
     if(j.teacher_id !== null){
       params.append('teacher_id', j.teacher_id);
     }
-    window.location.href = '/static/student.html?' + params.toString();
+    window.location.href = '/static/select.html?' + params.toString();
   } else {
     const j = await r.json();
     messageEl.textContent = j.detail || 'Leerling inloggen mislukt';
