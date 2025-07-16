@@ -54,7 +54,7 @@ class ErrorItem(BaseModel):
 
 class TutorResponse(BaseModel):
     mode: Literal["reading", "conversation", "silence"]
-    feedback_text: str = Field(..., max_length=160)
+    feedback_text: str = Field(...)
     repeat: bool
     is_correct: bool | None = None
     errors: List[ErrorItem] = Field(default_factory=list)
