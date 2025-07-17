@@ -23,11 +23,13 @@ document.getElementById('start').onclick = () => {
   ev.addEventListener('progress', e => {
     bar.style.width = (parseFloat(e.data)*100) + '%';
   });
-  ev.addEventListener('sentence', e => { data.push(JSON.parse(e.data)); });
-  ev.addEventListener('direction', e => { data.push(JSON.parse(e.data)); });
+  ev.addEventListener('sentence', e => { data.push({type:'sentence', ...JSON.parse(e.data)}); });
+  ev.addEventListener('direction', e => { data.push({type:'direction', ...JSON.parse(e.data)}); });
   ev.addEventListener('complete', () => {
     ev.close();
     localStorage.setItem('story_data', JSON.stringify(data));
+    localStorage.setItem('theme', theme);
+    localStorage.setItem('level', level);
     const q = new URLSearchParams({student_id: studentId, teacher_id: teacherId, name});
     window.location.href = '/static/story.html?' + q.toString();
   });
