@@ -115,7 +115,7 @@ function showSentence(){
     progressText.textContent = `${storyIndex+2}/${storyData.length}`;
     micWrapper.style.display = 'none';
     playbackBtn.style.display = 'none';
-    retryBtn.style.display = 'none';
+    if(retryBtn) retryBtn.style.display = 'none';
     micBtn.disabled = true;
     nextBtn.disabled = !devMode;
     prevBtn.disabled = storyIndex === 0;
@@ -136,9 +136,11 @@ function showSentence(){
     progressText.textContent = `${storyIndex+1}/${storyData.length}`;
     micWrapper.style.display = '';
     playbackBtn.style.display = '';
-    retryBtn.style.display = '';
+    if(retryBtn){
+      retryBtn.style.display = '';
+      retryBtn.disabled = true;
+    }
     micBtn.disabled = false;
-    retryBtn.disabled = true;
     playbackBtn.disabled = true;
     nextBtn.disabled = !devMode;
     prevBtn.disabled = storyIndex === 0;
@@ -244,7 +246,7 @@ async function startRecording(){
   startVisualizer();
   micBtn.classList.add('active');
   micBtn.querySelector('.label').textContent = 'Luisteren...';
-  retryBtn.disabled = true;
+  if(retryBtn) retryBtn.disabled = true;
   playbackBtn.disabled = true;
   nextBtn.disabled = !devMode;
   statusEl.innerHTML = '<span class="spinner"></span>Opnemen';
@@ -311,7 +313,7 @@ async function stopRecording(){
       micBtn.disabled = false;
       micBtn.querySelector('.label').textContent = 'Opnemen';
       playbackBtn.disabled = false;
-      retryBtn.disabled = false;
+      if(retryBtn) retryBtn.disabled = false;
       nextBtn.disabled = false;
       prevBtn.disabled = false;
   });
@@ -423,18 +425,20 @@ playbackBtn.onclick = () => {
   }
 };
 
-retryBtn.onclick = () => {
-  feedbackModule.classList.remove('visible');
-  playbackUrl && URL.revokeObjectURL(playbackUrl);
-  playbackUrl = null;
-  recordedChunks = [];
-  statusEl.textContent = '';
-  micBtn.disabled = false;
-  micBtn.querySelector('.label').textContent = 'Opnemen';
-  playbackBtn.disabled = true;
-  retryBtn.disabled = true;
-  nextBtn.disabled = !devMode;
-};
+if(retryBtn){
+  retryBtn.onclick = () => {
+    feedbackModule.classList.remove('visible');
+    playbackUrl && URL.revokeObjectURL(playbackUrl);
+    playbackUrl = null;
+    recordedChunks = [];
+    statusEl.textContent = '';
+    micBtn.disabled = false;
+    micBtn.querySelector('.label').textContent = 'Opnemen';
+    playbackBtn.disabled = true;
+    retryBtn.disabled = true;
+    nextBtn.disabled = !devMode;
+  };
+}
 
 document.getElementById('logout').onclick = () => {
   window.location.href = '/';
