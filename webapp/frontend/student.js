@@ -67,7 +67,7 @@ nextBtn.onclick = async () => {
   progressBar.style.width = ((j.index / j.total) * 100) + '%';
   progressText.textContent = `${j.index}/${j.total}`;
   micBtn.disabled = false;
-  retryBtn.disabled = true;
+  if(retryBtn) retryBtn.disabled = true;
   playbackBtn.disabled = true;
   nextBtn.disabled = true;
   prevBtn.disabled = false;
@@ -86,7 +86,7 @@ prevBtn.onclick = async () => {
   progressBar.style.width = ((j.index / j.total) * 100) + '%';
   progressText.textContent = `${j.index}/${j.total}`;
   micBtn.disabled = false;
-  retryBtn.disabled = true;
+  if(retryBtn) retryBtn.disabled = true;
   playbackBtn.disabled = true;
   nextBtn.disabled = true;
 };
@@ -158,7 +158,7 @@ async function startRecording(){
   startVisualizer();
   micBtn.classList.add('active');
   micBtn.querySelector('.label').textContent = 'Luisteren...';
-  retryBtn.disabled = true;
+  if(retryBtn) retryBtn.disabled = true;
   playbackBtn.disabled = true;
   nextBtn.disabled = true;
   statusEl.innerHTML = '<span class="spinner"></span>Opnemen';
@@ -225,7 +225,7 @@ async function stopRecording(){
       micBtn.disabled = false;
       micBtn.querySelector('.label').textContent = 'Opnemen';
       playbackBtn.disabled = false;
-      retryBtn.disabled = false;
+        if(retryBtn) retryBtn.disabled = false;
       nextBtn.disabled = false;
       prevBtn.disabled = false;
   });
@@ -337,18 +337,20 @@ playbackBtn.onclick = () => {
   }
 };
 
-retryBtn.onclick = () => {
-  feedbackModule.classList.remove('visible');
-  playbackUrl && URL.revokeObjectURL(playbackUrl);
-  playbackUrl = null;
-  recordedChunks = [];
-  statusEl.textContent = '';
-  micBtn.disabled = false;
-  micBtn.querySelector('.label').textContent = 'Opnemen';
-  playbackBtn.disabled = true;
-  retryBtn.disabled = true;
-  nextBtn.disabled = true;
-};
+if(retryBtn){
+  retryBtn.onclick = () => {
+    feedbackModule.classList.remove('visible');
+    playbackUrl && URL.revokeObjectURL(playbackUrl);
+    playbackUrl = null;
+    recordedChunks = [];
+    statusEl.textContent = '';
+    micBtn.disabled = false;
+    micBtn.querySelector('.label').textContent = 'Opnemen';
+    playbackBtn.disabled = true;
+    retryBtn.disabled = true;
+    nextBtn.disabled = true;
+  };
+}
 
 document.getElementById('logout').onclick = () => {
   window.location.href = '/';
