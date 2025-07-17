@@ -4,7 +4,8 @@ let stream;
 let recording = false;
 let sentence = "";
 let sessionId = null;
-let fillerAudio = null;
+let fillerAudio = localStorage.getItem('filler_audio');
+let sentenceAudio = null;
 let delaySeconds = 0;
 let teacherId = null;
 let studentId = null;
@@ -121,6 +122,7 @@ function showSentence(){
     prevBtn.disabled = storyIndex === 0;
   } else {
     sentence = item.text;
+    sentenceAudio = item.audio;
     const p = document.createElement('p');
     item.text.split(' ').forEach((w,i)=>{
       const audio = item.words ? item.words[i] : null;
@@ -197,7 +199,6 @@ async function startRecording(){
         throw new Error(j.detail);
       }
       sessionId = j.session_id;
-      fillerAudio = j.filler_audio;
       delaySeconds = j.delay_seconds;
       for(const blob of pendingChunks){
         const f = new FormData();
@@ -291,14 +292,15 @@ async function stopRecording(){
   sessionId = null;
   setTimeout(async () => {
     statusEl.innerHTML = '<span class="spinner"></span>Feedback afspelen';
-    playAudio('/api/audio/' + fillerAudio, async () => {
-      let data;
-      try {
-        data = await stopPromise;
-      } catch(err) {
-        statusEl.textContent = 'Fout: ' + err.message;
-        return;
-      }
+    playAudio('/api/audio/' + fillerAudio, () => {
+      playAudio('/api/audio/' + sentenceAudio, async () => {
+        let data;
+        try {
+          data = await stopPromise;
+        } catch(err) {
+          statusEl.textContent = 'Fout: ' + err.message;
+          return;
+        }
       const total = recordedChunks.reduce((n,c)=>n+c.length,0);
       const flat = new Int16Array(total);
       let pos = 0;
@@ -316,6 +318,7 @@ async function stopRecording(){
       if(retryBtn) retryBtn.disabled = false;
       nextBtn.disabled = false;
       prevBtn.disabled = false;
+    });
   });
   }, delaySeconds * 1000);
 }
