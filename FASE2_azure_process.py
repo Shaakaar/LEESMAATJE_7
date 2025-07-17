@@ -91,7 +91,11 @@ class AzurePronunciationEvaluator:
         console.print(f"\n[bold green][Azure Pron final][/bold green] {text}")
 
         if self.results is not None:
-            self.results["azure_pronunciation"]["final_transcript"] = text
+            prev = self.results["azure_pronunciation"].get("final_transcript")
+            if prev:
+                self.results["azure_pronunciation"]["final_transcript"] = f"{prev} {text}".strip()
+            else:
+                self.results["azure_pronunciation"]["final_transcript"] = text
 
         raw_json = evt.result.properties.get(
             speechsdk.PropertyId.SpeechServiceResponse_JsonResult
@@ -164,7 +168,11 @@ class AzurePronunciationEvaluator:
         result = recognizer.recognize_once()
 
         if self.results is not None:
-            self.results["azure_pronunciation"]["final_transcript"] = result.text
+            prev = self.results["azure_pronunciation"].get("final_transcript")
+            if prev:
+                self.results["azure_pronunciation"]["final_transcript"] = f"{prev} {result.text}".strip()
+            else:
+                self.results["azure_pronunciation"]["final_transcript"] = result.text
 
         raw_json = result.properties.get(
             speechsdk.PropertyId.SpeechServiceResponse_JsonResult
@@ -257,7 +265,11 @@ class AzurePlainTranscriber:
         txt = evt.result.text
         console.print(f"\n[bold blue][Azure Plain final][/bold blue] {txt}")
         if self.results is not None:
-            self.results["azure_plain"]["final_transcript"] = txt
+            prev = self.results["azure_plain"].get("final_transcript")
+            if prev:
+                self.results["azure_plain"]["final_transcript"] = f"{prev} {txt}".strip()
+            else:
+                self.results["azure_plain"]["final_transcript"] = txt
 
     # ------------------------------------------------------------------ control
     def start(self):
@@ -285,4 +297,8 @@ class AzurePlainTranscriber:
         )
         result = recognizer.recognize_once()
         if self.results is not None:
-            self.results["azure_plain"]["final_transcript"] = result.text
+            prev = self.results["azure_plain"].get("final_transcript")
+            if prev:
+                self.results["azure_plain"]["final_transcript"] = f"{prev} {result.text}".strip()
+            else:
+                self.results["azure_plain"]["final_transcript"] = result.text
