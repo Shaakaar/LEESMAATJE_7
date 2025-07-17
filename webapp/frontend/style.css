@@ -383,6 +383,21 @@ button.accent {
 .word:hover {
   color: var(--primary);
 }
+.word.wrong {
+  background:#f8d7da;
+  padding:0 0.2rem;
+  border-radius:0.2rem;
+}
+
+@keyframes shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+.shake {
+  animation: shake 90ms ease-in-out;
+}
 .play-sent {
   background:none;
   border:none;

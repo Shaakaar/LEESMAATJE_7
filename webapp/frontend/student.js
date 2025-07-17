@@ -299,6 +299,20 @@ function showFeedback(data){
     '<strong class="highlight">$1</strong>');
   textEl.innerHTML = html;
   feedbackModule.classList.add('visible');
+  const words = Array.from(sentenceEl.querySelectorAll('.word'));
+  words.forEach(w => w.classList.remove('wrong'));
+  if(Array.isArray(data.errors)){
+    for(const err of data.errors){
+      const expected = (err.expected_word || err.word || '').toLowerCase();
+      for(const span of words){
+        if(span.textContent.trim().toLowerCase() === expected){
+          span.classList.add('wrong','shake');
+          setTimeout(()=>span.classList.remove('shake'),90);
+          break;
+        }
+      }
+    }
+  }
   let negative;
   if(typeof data.correct === 'boolean'){
     negative = !data.correct;

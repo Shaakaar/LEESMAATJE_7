@@ -214,6 +214,7 @@ async def process(
             "filler_audio": os.path.basename(filler_audio),
             "feedback_audio": os.path.basename(feedback_audio),
             "correct": tutor_resp.is_correct,
+            "errors": [e.model_dump(by_alias=True) for e in tutor_resp.errors],
             "delay_seconds": config.DELAY_SECONDS,
         }
     )
@@ -301,6 +302,7 @@ async def realtime_stop(sid: str):
             ),
             "feedback_audio": os.path.basename(feedback_audio),
             "correct": tutor_resp.is_correct,
+            "errors": [e.model_dump(by_alias=True) for e in tutor_resp.errors],
             "delay_seconds": config.DELAY_SECONDS,
         }
     )
