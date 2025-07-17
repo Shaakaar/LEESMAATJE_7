@@ -32,7 +32,11 @@ const playbackBtn = document.getElementById('playback');
 const retryBtn = document.getElementById('retry');
 const nextBtn = document.getElementById('next');
 const prevBtn = document.getElementById('prev');
+const overlay = document.getElementById('loading_overlay');
 progressText.textContent = '';
+
+function showOverlay(){ overlay.style.display = 'flex'; }
+function hideOverlay(){ overlay.style.display = 'none'; }
 // Models are initialized on the login page, so no need to
 // initialize them again here.
 
@@ -42,7 +46,10 @@ studentId = params.get('student_id');
 teacherId = parseInt(params.get('teacher_id'), 10);
 studentName = params.get('name');
 const storyData = JSON.parse(localStorage.getItem('story_data') || '[]');
+const theme = localStorage.getItem('theme');
+const level = localStorage.getItem('level');
 let storyIndex = 0;
+let selectedDirection = null;
 if(!storyData.length){
   // No story loaded, go back to selection page
   window.location.href = '/';
@@ -75,35 +82,93 @@ function showSentence(){
     sentence = '';
     return;
   }
-  sentence = item.text;
   sentenceEl.innerHTML = '';
-  const p = document.createElement('p');
-  item.text.split(' ').forEach((w,i)=>{
-    const audio = item.words ? item.words[i] : null;
-    p.appendChild(makeWord(w, audio));
-  });
-  const btn = document.createElement('button');
-  btn.className = 'play-sent';
-  btn.innerHTML = '<i class="lucide lucide-volume-2"></i>';
-  btn.onclick = () => { new Audio('/api/audio/' + item.audio).play(); };
-  p.appendChild(btn);
-  sentenceEl.appendChild(p);
   feedbackModule.classList.remove('visible');
-  progressBar.style.width = (((storyIndex+1) / storyData.length) * 100) + '%';
-  progressText.textContent = `${storyIndex+1}/${storyData.length}`;
-  micBtn.disabled = false;
-  retryBtn.disabled = true;
-  playbackBtn.disabled = true;
-  nextBtn.disabled = true;
-  prevBtn.disabled = storyIndex === 0;
+  selectedDirection = null;
+
+  if(item.type === 'direction' && storyData[storyIndex+1] && storyData[storyIndex+1].type === 'direction'){
+    const opts = [item, storyData[storyIndex+1]];
+    const wrap = document.createElement('div');
+    wrap.className = 'directions';
+    opts.forEach((opt,i)=>{
+      const div = document.createElement('label');
+      div.className = 'direction-option';
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'direction';
+      radio.value = i;
+      radio.onchange = () => { selectedDirection = i; nextBtn.disabled = false; };
+      const span = document.createElement('span');
+      span.textContent = opt.text;
+      const playBtn = document.createElement('button');
+      playBtn.className = 'play-sent';
+      playBtn.innerHTML = '<i class="lucide lucide-volume-2"></i>';
+      playBtn.onclick = () => { new Audio('/api/audio/' + opt.audio).play(); };
+      div.appendChild(radio);
+      div.appendChild(span);
+      div.appendChild(playBtn);
+      wrap.appendChild(div);
+    });
+    sentenceEl.appendChild(wrap);
+    progressBar.style.width = (((storyIndex+2) / storyData.length) * 100) + '%';
+    progressText.textContent = `${storyIndex+2}/${storyData.length}`;
+    micWrapper.style.display = 'none';
+    playbackBtn.style.display = 'none';
+    retryBtn.style.display = 'none';
+    micBtn.disabled = true;
+    nextBtn.disabled = true;
+    prevBtn.disabled = storyIndex === 0;
+  } else {
+    sentence = item.text;
+    const p = document.createElement('p');
+    item.text.split(' ').forEach((w,i)=>{
+      const audio = item.words ? item.words[i] : null;
+      p.appendChild(makeWord(w, audio));
+    });
+    const btn = document.createElement('button');
+    btn.className = 'play-sent';
+    btn.innerHTML = '<i class="lucide lucide-volume-2"></i>';
+    btn.onclick = () => { new Audio('/api/audio/' + item.audio).play(); };
+    p.appendChild(btn);
+    sentenceEl.appendChild(p);
+    progressBar.style.width = (((storyIndex+1) / storyData.length) * 100) + '%';
+    progressText.textContent = `${storyIndex+1}/${storyData.length}`;
+    micWrapper.style.display = '';
+    playbackBtn.style.display = '';
+    retryBtn.style.display = '';
+    micBtn.disabled = false;
+    retryBtn.disabled = true;
+    playbackBtn.disabled = true;
+    nextBtn.disabled = true;
+    prevBtn.disabled = storyIndex === 0;
+  }
 }
 
 
 
 
-nextBtn.onclick = () => {
-  storyIndex = (storyIndex + 1) % storyData.length;
-  showSentence();
+nextBtn.onclick = async () => {
+  const item = storyData[storyIndex];
+  if(item && item.type === 'direction'){
+    if(selectedDirection === null) return;
+    const choice = selectedDirection === 0 ? item.text : storyData[storyIndex+1].text;
+    showOverlay();
+    const url = `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(choice)}`;
+    const ev = new EventSource(url);
+    const newData = [];
+    ev.addEventListener('sentence', e => { newData.push({type:'sentence', ...JSON.parse(e.data)}); });
+    ev.addEventListener('direction', e => { newData.push({type:'direction', ...JSON.parse(e.data)}); });
+    ev.addEventListener('progress', e => {
+      progressBar.style.width = (parseFloat(e.data)*100) + '%';
+    });
+    await new Promise(res => ev.addEventListener('complete', () => { ev.close(); res(); }));
+    hideOverlay();
+    storyData.splice(storyIndex, 2, ...newData);
+    showSentence();
+  } else {
+    storyIndex = (storyIndex + 1) % storyData.length;
+    showSentence();
+  }
 };
 
 prevBtn.onclick = () => {

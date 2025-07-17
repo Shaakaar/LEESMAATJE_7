@@ -333,6 +333,7 @@ async def start_story(theme: str, level: str):
                 "event": "sentence",
                 "data": json.dumps(
                     {
+                        "type": "sentence",
                         "text": sent,
                         "audio": os.path.basename(audio),
                         "words": word_audios,
@@ -347,10 +348,89 @@ async def start_story(theme: str, level: str):
                 "event": "direction",
                 "data": json.dumps(
                     {
+                        "type": "direction",
                         "text": direc,
                         "audio": os.path.basename(audio),
                     }
                 ),
+            }
+            done += 1
+            yield {"event": "progress", "data": str(done / total)}
+        yield {"event": "complete", "data": "ok"}
+
+    return EventSourceResponse(event_stream())
+
+
+@app.get("/api/continue_story")
+async def continue_story(theme: str, level: str, direction: str, mistakes: str | None = None):
+    """Generate the next story section based on the chosen direction."""
+
+    letters = []
+    if mistakes:
+        try:
+            letters = json.loads(mistakes)
+        except Exception:
+            letters = []
+
+    import openai
+
+    client = openai.AsyncOpenAI()
+
+    sys_prompt = (
+        "Je bent een verhalenverteller voor jonge kinderen. "
+        "Antwoord in JSON met de sleutels 'sentences' (lijst van zinnen) "
+        "en 'directions' (lijst van twee keuzes)."
+    )
+    user_prompt = (
+        f"We zijn bezig met een verhaal in het thema {theme} op niveau {level}. "
+        f"Het verhaal gaat verder in de richting: {direction}. "
+        "Schrijf vijf korte zinnen voor het vervolg. "
+        + (f"Verwerk waar mogelijk deze letters of klanken: {', '.join(letters)}. " if letters else "")
+        + "Geef daarna twee nieuwe keuzes voor het vervolg."
+    )
+
+    resp = await client.chat.completions.create(
+        model=config.GPT_MODEL,
+        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
+        response_format={"type": "json_object"},
+    )
+
+    try:
+        j = json.loads(resp.choices[0].message.content)
+        sentences = j.get("sentences", [])
+        directions = j.get("directions", [])
+    except Exception:
+        sentences = []
+        directions = []
+
+    from .tts import tts_to_file
+
+    async def event_stream():
+        total = len(sentences) + len(directions)
+        done = 0
+        for sent in sentences:
+            audio = tts_to_file(sent)
+            word_audios = [os.path.basename(tts_to_file(w)) for w in sent.split()]
+            yield {
+                "event": "sentence",
+                "data": json.dumps({
+                    "type": "sentence",
+                    "text": sent,
+                    "audio": os.path.basename(audio),
+                    "words": word_audios,
+                }),
+            }
+            done += 1
+            yield {"event": "progress", "data": str(done / total)}
+        for direc in directions:
+            audio = tts_to_file(direc)
+            yield {
+                "event": "direction",
+                "data": json.dumps({
+                    "type": "direction",
+                    "text": direc,
+                    "audio": os.path.basename(audio),
+                }),
             }
             done += 1
             yield {"event": "progress", "data": str(done / total)}
