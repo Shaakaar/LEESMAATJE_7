@@ -27,6 +27,9 @@ import gpt_client
 # class itself is imported lazily in `realtime_start` to avoid importing heavy
 # dependencies when they are not installed.
 sessions: dict[str, object] = {}
+# Path to the pre-generated "De zin was" clip. Generated on-demand in
+# `start_story` and reused for all sessions.
+filler_phrase_audio: str | None = None
 
 app = FastAPI()
 storage.init_db()
@@ -242,21 +245,16 @@ async def realtime_start(
         raise HTTPException(status_code=400, detail="Models not initialized")
     # Import heavy modules lazily
     from .realtime import RealtimeSession
-    from .tts import tts_to_file
-
-    filler_text = f"De zin was {sentence}"
-    filler_audio = tts_to_file(filler_text)
     sess = RealtimeSession(
         sentence,
         sample_rate,
-        filler_audio=filler_audio,
+        filler_audio=None,
         teacher_id=teacher_id,
         student_id=student_id,
     )
     sessions[sess.id] = sess
     return {
         "session_id": sess.id,
-        "filler_audio": os.path.basename(filler_audio),
         "delay_seconds": config.DELAY_SECONDS,
     }
 
@@ -326,6 +324,13 @@ async def start_story(theme: str, level: str):
     from .tts import tts_to_file
 
     async def event_stream():
+        global filler_phrase_audio
+        if filler_phrase_audio is None:
+            filler_phrase_audio = tts_to_file("De zin was")
+        yield {
+            "event": "filler",
+            "data": json.dumps({"audio": os.path.basename(filler_phrase_audio)}),
+        }
         total = len(story["section1"]) + len(story["directions"])
         done = 0
         for sent in story["section1"]:
