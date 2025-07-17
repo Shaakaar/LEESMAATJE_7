@@ -45,6 +45,7 @@ const params = new URLSearchParams(window.location.search);
 studentId = params.get('student_id');
 teacherId = parseInt(params.get('teacher_id'), 10);
 studentName = params.get('name');
+const devMode = params.has('dev');
 const storyData = JSON.parse(localStorage.getItem('story_data') || '[]');
 const theme = localStorage.getItem('theme');
 const level = localStorage.getItem('level');
@@ -116,7 +117,7 @@ function showSentence(){
     playbackBtn.style.display = 'none';
     retryBtn.style.display = 'none';
     micBtn.disabled = true;
-    nextBtn.disabled = true;
+    nextBtn.disabled = !devMode;
     prevBtn.disabled = storyIndex === 0;
   } else {
     sentence = item.text;
@@ -139,7 +140,7 @@ function showSentence(){
     micBtn.disabled = false;
     retryBtn.disabled = true;
     playbackBtn.disabled = true;
-    nextBtn.disabled = true;
+    nextBtn.disabled = !devMode;
     prevBtn.disabled = storyIndex === 0;
   }
 }
@@ -245,7 +246,7 @@ async function startRecording(){
   micBtn.querySelector('.label').textContent = 'Luisteren...';
   retryBtn.disabled = true;
   playbackBtn.disabled = true;
-  nextBtn.disabled = true;
+  nextBtn.disabled = !devMode;
   statusEl.innerHTML = '<span class="spinner"></span>Opnemen';
 }
 
@@ -418,7 +419,7 @@ retryBtn.onclick = () => {
   micBtn.querySelector('.label').textContent = 'Opnemen';
   playbackBtn.disabled = true;
   retryBtn.disabled = true;
-  nextBtn.disabled = true;
+  nextBtn.disabled = !devMode;
 };
 
 document.getElementById('logout').onclick = () => {
