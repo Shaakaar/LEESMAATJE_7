@@ -63,6 +63,13 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         if self.results is not None:
             self.results["wav2vec2_phonemes"] = []
 
+    def reset_results(self, results: dict | None = None):
+        """Attach a new results dict and clear internal buffers."""
+        self.results = results
+        self.buffer = np.zeros((0,), dtype=np.int16)
+        if self.results is not None:
+            self.results["wav2vec2_phonemes"] = []
+
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor, self.model = _load_phoneme_model(self.device)
 
@@ -228,12 +235,19 @@ class Wav2Vec2Transcriber(threading.Thread):
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor, self.model = _load_asr_model(self.device)
-
+        
         console.rule(f"[bold cyan]Wav2Vec2 Transcriber[/bold cyan]", style="cyan")
         console.print(f"🔄  [cyan]Loading Wav2Vec2 ASR model[/cyan] '{ASR_MODEL_ID}' on [blue]{self.device}[/blue] …")
 
         self.model.eval()
         console.print("[cyan]✅  Model loaded and ready.[/cyan]\n")
+
+    def reset_results(self, results: dict | None = None):
+        """Attach a new results dict and clear internal buffers."""
+        self.results = results
+        self.buffer = np.zeros((0,), dtype=np.int16)
+        if self.results is not None:
+            self.results["wav2vec2_asr"] = []
 
     def run(self):
         if not self.realtime:
