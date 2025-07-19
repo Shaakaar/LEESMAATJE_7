@@ -103,7 +103,7 @@ class AzurePronunciationEvaluator:
         )
         self.pa_cfg = speechsdk.PronunciationAssessmentConfig(json_string=pa_json)
         self.pa_cfg.enable_prosody_assessment()
-        if self.realtime:
+        if self.realtime and self.recognizer is not None:
             self.pa_cfg.apply_to(self.recognizer)
             phrase_list = speechsdk.PhraseListGrammar.from_recognizer(self.recognizer)
             phrase_list.addPhrase(self.reference_text)
