@@ -13,6 +13,7 @@ let studentName = null;
 let lastFeedbackAudio = null;
 let recordedChunks = [];
 let playbackUrl = null;
+let startPromise = null;
 let analyser;
 let dataArray;
 
@@ -62,6 +63,31 @@ if(isNaN(teacherId)){
 }
 if(studentName){
   document.getElementById('student_name').textContent = studentName;
+}
+
+function prepareSession(){
+  if(!sentence) return;
+  const ctx = new AudioContext();
+  const fd = new FormData();
+  fd.append('sentence', sentence);
+  fd.append('sample_rate', ctx.sampleRate);
+  fd.append('teacher_id', teacherId);
+  fd.append('student_id', studentId);
+  if(sessionId){
+    fd.append('session_id', sessionId);
+  }
+  startPromise = fetch('/api/realtime/start', {method:'POST', body: fd})
+    .then(async r => {
+      const j = await r.json();
+      if(r.ok){
+        sessionId = j.session_id;
+        delaySeconds = j.delay_seconds;
+      } else {
+        console.error('Realtime start failed', j.detail);
+      }
+    })
+    .finally(()=>{ startPromise = null; ctx.close(); });
+  return startPromise;
 }
 
 function makeWord(word, audio){
@@ -144,6 +170,7 @@ function showSentence(){
     playbackBtn.disabled = true;
     nextBtn.disabled = !devMode;
     prevBtn.disabled = storyIndex === 0;
+    prepareSession();
   }
 }
 
@@ -181,23 +208,16 @@ prevBtn.onclick = () => {
 
 async function startRecording(){
   if (!sentence) return;
+  if(startPromise){
+    await startPromise;
+  }
+  if(!sessionId){
+    await prepareSession();
+    if(startPromise){
+      await startPromise;
+    }
+  }
   audioCtx = new AudioContext();
-  const fd = new FormData();
-  fd.append('sentence', sentence);
-  fd.append('sample_rate', audioCtx.sampleRate);
-  fd.append('teacher_id', teacherId);
-  fd.append('student_id', studentId);
-  if(sessionId){
-    fd.append('session_id', sessionId);
-  }
-  const resp = await fetch('/api/realtime/start', {method:'POST', body: fd});
-  const j = await resp.json();
-  if(!resp.ok){
-    statusEl.textContent = 'Fout: ' + j.detail;
-    return;
-  }
-  sessionId = j.session_id;
-  delaySeconds = j.delay_seconds;
 
   stream = await navigator.mediaDevices.getUserMedia({audio:true});
 
