@@ -82,6 +82,35 @@ class AzurePronunciationEvaluator:
                 "pronunciation_scores": {}
             }
 
+    def reset_results(self, results: dict | None = None):
+        """Attach a new results dict and clear cached values."""
+        self.results = results
+        if self.results is not None:
+            self.results["azure_pronunciation"] = {
+                "final_transcript": None,
+                "word_timings": [],
+                "pronunciation_scores": {},
+            }
+
+    def update_reference(self, text: str):
+        """Change the reference text without rebuilding the recognizer."""
+        self.reference_text = text
+        pa_json = json.dumps(
+            {
+                "referenceText": self.reference_text,
+                "gradingSystem": "HundredMark",
+                "granularity": "Phoneme",
+                "phonemeAlphabet": "SAPI",
+                "nBestPhonemeCount": 1,
+            }
+        )
+        self.pa_cfg = speechsdk.PronunciationAssessmentConfig(json_string=pa_json)
+        self.pa_cfg.enable_prosody_assessment()
+        if self.realtime:
+            self.pa_cfg.apply_to(self.recognizer)
+            phrase_list = speechsdk.PhraseListGrammar.from_recognizer(self.recognizer)
+            phrase_list.addPhrase(self.reference_text)
+
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
         console.print(f"[yellow][Azure Pron interim][/yellow] {evt.result.text}", end="\r")
@@ -249,6 +278,15 @@ class AzurePlainTranscriber:
             self.results["azure_plain"] = {
                 "final_transcript": None,
                 "interim_transcripts": []
+            }
+
+    def reset_results(self, results: dict | None = None):
+        """Attach a new results dict and clear cached values."""
+        self.results = results
+        if self.results is not None:
+            self.results["azure_plain"] = {
+                "final_transcript": None,
+                "interim_transcripts": [],
             }
 
     # ------------------------------------------------------------------ callbacks

@@ -13,8 +13,6 @@ let studentName = null;
 let lastFeedbackAudio = null;
 let recordedChunks = [];
 let playbackUrl = null;
-let pendingChunks = [];
-let startPromise = null;
 let analyser;
 let dataArray;
 
@@ -183,36 +181,25 @@ prevBtn.onclick = () => {
 
 async function startRecording(){
   if (!sentence) return;
-  stream = await navigator.mediaDevices.getUserMedia({audio:true});
   audioCtx = new AudioContext();
   const fd = new FormData();
   fd.append('sentence', sentence);
   fd.append('sample_rate', audioCtx.sampleRate);
   fd.append('teacher_id', teacherId);
   fd.append('student_id', studentId);
+  if(sessionId){
+    fd.append('session_id', sessionId);
+  }
+  const resp = await fetch('/api/realtime/start', {method:'POST', body: fd});
+  const j = await resp.json();
+  if(!resp.ok){
+    statusEl.textContent = 'Fout: ' + j.detail;
+    return;
+  }
+  sessionId = j.session_id;
+  delaySeconds = j.delay_seconds;
 
-  pendingChunks = [];
-  startPromise = fetch('/api/realtime/start', {method:'POST', body: fd})
-    .then(async r => {
-      const j = await r.json();
-      if(!r.ok){
-        throw new Error(j.detail);
-      }
-      sessionId = j.session_id;
-      delaySeconds = j.delay_seconds;
-      for(const blob of pendingChunks){
-        const f = new FormData();
-        f.append('file', blob, 'chunk.pcm');
-        fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
-      }
-      pendingChunks = [];
-    })
-    .catch(err => {
-      statusEl.textContent = 'Fout: ' + err.message;
-      recording = false;
-      stopVisualizer();
-    })
-    .finally(() => { startPromise = null; });
+  stream = await navigator.mediaDevices.getUserMedia({audio:true});
 
   const source = audioCtx.createMediaStreamSource(stream);
   analyser = audioCtx.createAnalyser();
@@ -236,8 +223,6 @@ async function startRecording(){
       const f = new FormData();
       f.append('file', blob, 'chunk.pcm');
       fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
-    } else {
-      pendingChunks.push(blob);
     }
   };
   recordedChunks = [];
@@ -271,15 +256,6 @@ async function stopRecording(){
   micBtn.querySelector('.label').textContent = 'Analyseren...';
   statusEl.innerHTML = '<span class="spinner"></span>Analyseren';
 
-  if(startPromise){
-    try {
-      await startPromise;
-    } catch(err) {
-      // start failed, nothing to stop
-      return;
-    }
-  }
-
   const stopPromise = fetch('/api/realtime/stop/' + sessionId, { method: 'POST' })
     .then(async r => {
       const j = await r.json();
@@ -289,7 +265,6 @@ async function stopRecording(){
       }
       return j;
     });
-  sessionId = null;
   setTimeout(async () => {
     statusEl.innerHTML = '<span class="spinner"></span>Feedback afspelen';
     playAudio('/api/audio/' + fillerAudio, () => {
