@@ -114,12 +114,22 @@ async def root():
 
 @app.post("/api/initialize_models")
 async def initialize_models():
-    global models_ready
-    # Trigger lazy loading of wav2vec2 models
-    from FASE2_wav2vec2_process import _load_asr_model, _load_phoneme_model
+    """Load heavy wav2vec2 models once.
 
-    _load_asr_model("cpu")
-    _load_phoneme_model("cpu")
+    The models are cached in :func:`_load_asr_model` and
+    :func:`_load_phoneme_model`, so calling them here ensures subsequent
+    requests reuse the same instances.  When CUDA is available the models are
+    loaded on the GPU, otherwise they fall back to the CPU.
+    """
+
+    global models_ready
+    from FASE2_wav2vec2_process import _load_asr_model, _load_phoneme_model
+    import torch
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    _load_asr_model(device)
+    _load_phoneme_model(device)
     models_ready = True
     return {"status": "ok"}
 
