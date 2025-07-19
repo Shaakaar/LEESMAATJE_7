@@ -170,6 +170,7 @@ function showSentence(){
     playbackBtn.disabled = true;
     nextBtn.disabled = !devMode;
     prevBtn.disabled = storyIndex === 0;
+    prepareSession();
   }
 }
 
@@ -210,11 +211,9 @@ async function startRecording(){
   if(startPromise){
     await startPromise;
   }
-  if(!sessionId){
-    await prepareSession();
-    if(startPromise){
-      await startPromise;
-    }
+  await prepareSession();
+  if(startPromise){
+    await startPromise;
   }
   audioCtx = new AudioContext();
 
