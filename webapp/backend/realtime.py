@@ -64,8 +64,9 @@ class RealtimeSession:
             self.azure_plain.start()
 
     # ------------------------------------------------------------------ helpers
-    def _create_results(self, sentence: str):
-        self.id = str(uuid.uuid4())
+    def _create_results(self, sentence: str, *, reuse_id: bool = False):
+        if not reuse_id:
+            self.id = str(uuid.uuid4())
         self.sentence = sentence
         self.results = {
             "session_id": self.id,
@@ -115,10 +116,14 @@ class RealtimeSession:
         """Prepare the session for a new sentence without rebuilding Azure."""
         flush_audio_queue(self.audio_q)
         self.wavefile.close()
-        self._create_results(sentence)
+        self._create_results(sentence, reuse_id=True)
         self._create_wav()
         self.azure_pron.reset_results(self.results)
         self.azure_plain.reset_results(self.results)
+        if hasattr(self, "phon_thread"):
+            self.phon_thread.reset_results(self.results)
+        if hasattr(self, "asr_thread"):
+            self.asr_thread.reset_results(self.results)
         self.azure_pron.update_reference(sentence)
         if self.azure_pron.realtime:
             self.azure_pron.start()
