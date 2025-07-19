@@ -116,7 +116,8 @@ class RealtimeSession:
         """Prepare the session for a new sentence without rebuilding Azure."""
         flush_audio_queue(self.audio_q)
         self.wavefile.close()
-        self._create_results(sentence, reuse_id=True)
+        # Use a fresh session ID for each result to avoid DB conflicts
+        self._create_results(sentence)
         self._create_wav()
         self.azure_pron.reset_results(self.results)
         self.azure_plain.reset_results(self.results)
