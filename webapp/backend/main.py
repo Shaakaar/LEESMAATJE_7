@@ -250,19 +250,24 @@ async def realtime_start(
     sample_rate: int = Form(16000),
     teacher_id: int = Form(1),
     student_id: int = Form(0),
+    session_id: str | None = Form(None),
 ):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
     # Import heavy modules lazily
     from .realtime import RealtimeSession
-    sess = RealtimeSession(
-        sentence,
-        sample_rate,
-        filler_audio=None,
-        teacher_id=teacher_id,
-        student_id=student_id,
-    )
-    sessions[sess.id] = sess
+    if session_id and session_id in sessions:
+        sess = sessions[session_id]
+        sess.reset(sentence)
+    else:
+        sess = RealtimeSession(
+            sentence,
+            sample_rate,
+            filler_audio=None,
+            teacher_id=teacher_id,
+            student_id=student_id,
+        )
+        sessions[sess.id] = sess
     return {
         "session_id": sess.id,
         "delay_seconds": config.DELAY_SECONDS,
@@ -281,7 +286,7 @@ async def realtime_chunk(sid: str, file: UploadFile = File(...)):
 
 @app.post("/api/realtime/stop/{sid}")
 async def realtime_stop(sid: str):
-    sess = sessions.pop(sid, None)
+    sess = sessions.get(sid)
     if not sess:
         raise HTTPException(status_code=404, detail="Unknown session")
     results = sess.stop()

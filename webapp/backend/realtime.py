@@ -20,17 +20,44 @@ console = Console()
 
 
 class RealtimeSession:
-    """Manage realtime audio analysis for one sentence."""
+    """Manage realtime audio analysis for multiple sentences."""
 
     def __init__(self, sentence: str, sample_rate: int = 16000, *, filler_audio: str | None = None, teacher_id: int = 0, student_id: int = 0):
         self.audio_q = queue.Queue()
-        self.id = str(uuid.uuid4())
-        self.sentence = sentence
         self.sample_rate = sample_rate
         self.filler_audio = filler_audio
         self.teacher_id = teacher_id
         self.student_id = student_id
-        self.results: Dict[str, Any] = {
+
+        self._create_results(sentence)
+        self._create_wav()
+
+        rt = config.REALTIME_FLAGS
+
+        # Persistent Azure engines
+        self.azure_pron = AzurePronunciationEvaluator(
+            sentence,
+            results=self.results,
+            realtime=rt.get("azure_pron", True),
+        )
+        self.azure_plain = AzurePlainTranscriber(
+            results=self.results,
+            realtime=rt.get("azure_plain", True),
+        )
+
+        # Per-sentence wav2vec2 threads
+        self._start_wav_threads()
+
+        if self.azure_pron.realtime:
+            self.azure_pron.start()
+        if self.azure_plain.realtime:
+            self.azure_plain.start()
+
+    # ------------------------------------------------------------------ helpers
+    def _create_results(self, sentence: str):
+        self.id = str(uuid.uuid4())
+        self.sentence = sentence
+        self.results = {
             "session_id": self.id,
             "reference_text": sentence,
             "reference_phonemes": analysis_pipeline._ref_ph_map(sentence),
@@ -44,6 +71,7 @@ class RealtimeSession:
             "metadata": {"language": "nl-NL", "chunk_duration": config.CHUNK_DURATION},
         }
 
+    def _create_wav(self):
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         self.wav_path = tmp.name
         self.results["audio_file"] = self.wav_path
@@ -52,9 +80,8 @@ class RealtimeSession:
         self.wavefile.setsampwidth(2)
         self.wavefile.setframerate(self.sample_rate)
 
+    def _start_wav_threads(self):
         rt = config.REALTIME_FLAGS
-
-        # Start wav2vec2 engines
         self.phon_thread = Wav2Vec2PhonemeExtractor(
             sample_rate=self.sample_rate,
             chunk_duration=config.CHUNK_DURATION,
@@ -69,22 +96,20 @@ class RealtimeSession:
             realtime=rt.get("w2v2_asr", True),
             audio_queue=self.audio_q,
         )
-
-        # Azure engines
-        self.azure_pron = AzurePronunciationEvaluator(
-            self.sentence,
-            results=self.results,
-            realtime=rt.get("azure_pron", True),
-        )
-        self.azure_plain = AzurePlainTranscriber(
-            results=self.results,
-            realtime=rt.get("azure_plain", True),
-        )
-
         if self.phon_thread.realtime:
             self.phon_thread.start()
         if self.asr_thread.realtime:
             self.asr_thread.start()
+
+    def reset(self, sentence: str):
+        """Prepare the session for a new sentence without rebuilding Azure."""
+        flush_audio_queue(self.audio_q)
+        self._create_results(sentence)
+        self._create_wav()
+        self.azure_pron.reset_results(self.results)
+        self.azure_plain.reset_results(self.results)
+        self.azure_pron.update_reference(sentence)
+        self._start_wav_threads()
         if self.azure_pron.realtime:
             self.azure_pron.start()
         if self.azure_plain.realtime:
