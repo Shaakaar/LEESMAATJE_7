@@ -231,6 +231,7 @@ async function stopRecording(){
         if(retryBtn) retryBtn.disabled = false;
       nextBtn.disabled = false;
       prevBtn.disabled = false;
+      audioCtx.close();
     };
     if(fillerAudio){
       playAudio('/api/audio/' + fillerAudio, handleFeedback);

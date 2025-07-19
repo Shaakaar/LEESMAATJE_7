@@ -311,6 +311,7 @@ async function stopRecording(){
       if(retryBtn) retryBtn.disabled = false;
       nextBtn.disabled = false;
       prevBtn.disabled = false;
+      audioCtx.close();
     });
   });
   }, delaySeconds * 1000);
