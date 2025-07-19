@@ -4,8 +4,7 @@ let stream;
 let recording = false;
 let sentence = "";
 let sessionId = null;
-let fillerAudio = localStorage.getItem('filler_audio');
-let sentenceAudio = null;
+let fillerAudio = null;
 let delaySeconds = 0;
 let teacherId = null;
 let studentId = null;
@@ -13,6 +12,7 @@ let studentName = null;
 let lastFeedbackAudio = null;
 let recordedChunks = [];
 let playbackUrl = null;
+let pendingChunks = [];
 let startPromise = null;
 let analyser;
 let dataArray;
@@ -63,31 +63,6 @@ if(isNaN(teacherId)){
 }
 if(studentName){
   document.getElementById('student_name').textContent = studentName;
-}
-
-function prepareSession(){
-  if(!sentence) return;
-  const ctx = new AudioContext();
-  const fd = new FormData();
-  fd.append('sentence', sentence);
-  fd.append('sample_rate', ctx.sampleRate);
-  fd.append('teacher_id', teacherId);
-  fd.append('student_id', studentId);
-  if(sessionId){
-    fd.append('session_id', sessionId);
-  }
-  startPromise = fetch('/api/realtime/start', {method:'POST', body: fd})
-    .then(async r => {
-      const j = await r.json();
-      if(r.ok){
-        sessionId = j.session_id;
-        delaySeconds = j.delay_seconds;
-      } else {
-        console.error('Realtime start failed', j.detail);
-      }
-    })
-    .finally(()=>{ startPromise = null; ctx.close(); });
-  return startPromise;
 }
 
 function makeWord(word, audio){
@@ -146,7 +121,6 @@ function showSentence(){
     prevBtn.disabled = storyIndex === 0;
   } else {
     sentence = item.text;
-    sentenceAudio = item.audio;
     const p = document.createElement('p');
     item.text.split(' ').forEach((w,i)=>{
       const audio = item.words ? item.words[i] : null;
@@ -207,17 +181,37 @@ prevBtn.onclick = () => {
 
 async function startRecording(){
   if (!sentence) return;
-  if(startPromise){
-    await startPromise;
-  }
-  // Always (re)initialize the session for this sentence
-  await prepareSession();
-  if(startPromise){
-    await startPromise;
-  }
-  audioCtx = new AudioContext();
-
   stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  audioCtx = new AudioContext();
+  const fd = new FormData();
+  fd.append('sentence', sentence);
+  fd.append('sample_rate', audioCtx.sampleRate);
+  fd.append('teacher_id', teacherId);
+  fd.append('student_id', studentId);
+
+  pendingChunks = [];
+  startPromise = fetch('/api/realtime/start', {method:'POST', body: fd})
+    .then(async r => {
+      const j = await r.json();
+      if(!r.ok){
+        throw new Error(j.detail);
+      }
+      sessionId = j.session_id;
+      fillerAudio = j.filler_audio;
+      delaySeconds = j.delay_seconds;
+      for(const blob of pendingChunks){
+        const f = new FormData();
+        f.append('file', blob, 'chunk.pcm');
+        fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
+      }
+      pendingChunks = [];
+    })
+    .catch(err => {
+      statusEl.textContent = 'Fout: ' + err.message;
+      recording = false;
+      stopVisualizer();
+    })
+    .finally(() => { startPromise = null; });
 
   const source = audioCtx.createMediaStreamSource(stream);
   analyser = audioCtx.createAnalyser();
@@ -241,6 +235,8 @@ async function startRecording(){
       const f = new FormData();
       f.append('file', blob, 'chunk.pcm');
       fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
+    } else {
+      pendingChunks.push(blob);
     }
   };
   recordedChunks = [];
@@ -274,6 +270,15 @@ async function stopRecording(){
   micBtn.querySelector('.label').textContent = 'Analyseren...';
   statusEl.innerHTML = '<span class="spinner"></span>Analyseren';
 
+  if(startPromise){
+    try {
+      await startPromise;
+    } catch(err) {
+      // start failed, nothing to stop
+      return;
+    }
+  }
+
   const stopPromise = fetch('/api/realtime/stop/' + sessionId, { method: 'POST' })
     .then(async r => {
       const j = await r.json();
@@ -283,17 +288,17 @@ async function stopRecording(){
       }
       return j;
     });
+  sessionId = null;
   setTimeout(async () => {
     statusEl.innerHTML = '<span class="spinner"></span>Feedback afspelen';
-    playAudio('/api/audio/' + fillerAudio, () => {
-      playAudio('/api/audio/' + sentenceAudio, async () => {
-        let data;
-        try {
-          data = await stopPromise;
-        } catch(err) {
-          statusEl.textContent = 'Fout: ' + err.message;
-          return;
-        }
+    playAudio('/api/audio/' + fillerAudio, async () => {
+      let data;
+      try {
+        data = await stopPromise;
+      } catch(err) {
+        statusEl.textContent = 'Fout: ' + err.message;
+        return;
+      }
       const total = recordedChunks.reduce((n,c)=>n+c.length,0);
       const flat = new Int16Array(total);
       let pos = 0;
@@ -311,8 +316,6 @@ async function stopRecording(){
       if(retryBtn) retryBtn.disabled = false;
       nextBtn.disabled = false;
       prevBtn.disabled = false;
-      audioCtx.close();
-    });
   });
   }, delaySeconds * 1000);
 }
