@@ -63,6 +63,9 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         if self.results is not None:
             self.results["wav2vec2_phonemes"] = []
 
+        # Load models so offline processing works immediately
+        self.reset_results(self.results)
+
     def reset_results(self, results: dict | None = None):
         """Attach a new results dict and clear internal buffers."""
         self.results = results
