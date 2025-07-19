@@ -115,7 +115,19 @@ def save_result(teacher_id: int, student_id: int, result: dict,
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO results(id, teacher_id, student_id, sentence, timestamp, audio_path, json_data, prompt_json) VALUES(?,?,?,?,?,?,?,?)",
+        (
+            "INSERT INTO results(id, teacher_id, student_id, sentence, timestamp, "
+            "audio_path, json_data, prompt_json) "
+            "VALUES(?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "teacher_id=excluded.teacher_id, "
+            "student_id=excluded.student_id, "
+            "sentence=excluded.sentence, "
+            "timestamp=excluded.timestamp, "
+            "audio_path=excluded.audio_path, "
+            "json_data=excluded.json_data, "
+            "prompt_json=excluded.prompt_json"
+        ),
         (
             result.get("session_id"),
             teacher_id,
