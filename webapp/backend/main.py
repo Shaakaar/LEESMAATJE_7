@@ -27,9 +27,6 @@ import gpt_client
 # class itself is imported lazily in `realtime_start` to avoid importing heavy
 # dependencies when they are not installed.
 sessions: dict[str, object] = {}
-# Path to the pre-generated "De zin was" clip. Generated on-demand in
-# `start_story` and reused for all sessions.
-filler_phrase_audio: str | None = None
 
 app = FastAPI()
 storage.init_db()
@@ -114,22 +111,12 @@ async def root():
 
 @app.post("/api/initialize_models")
 async def initialize_models():
-    """Load heavy wav2vec2 models once.
-
-    The models are cached in :func:`_load_asr_model` and
-    :func:`_load_phoneme_model`, so calling them here ensures subsequent
-    requests reuse the same instances.  When CUDA is available the models are
-    loaded on the GPU, otherwise they fall back to the CPU.
-    """
-
     global models_ready
+    # Trigger lazy loading of wav2vec2 models
     from FASE2_wav2vec2_process import _load_asr_model, _load_phoneme_model
-    import torch
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    _load_asr_model(device)
-    _load_phoneme_model(device)
+    _load_asr_model("cpu")
+    _load_phoneme_model("cpu")
     models_ready = True
     return {"status": "ok"}
 
@@ -250,29 +237,26 @@ async def realtime_start(
     sample_rate: int = Form(16000),
     teacher_id: int = Form(1),
     student_id: int = Form(0),
-    session_id: str | None = Form(None),
 ):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
     # Import heavy modules lazily
     from .realtime import RealtimeSession
-    if session_id and session_id in sessions:
-        sess = sessions[session_id]
-        new_id = sess.reset(sentence)
-        if new_id != session_id:
-            sessions.pop(session_id, None)
-            sessions[new_id] = sess
-    else:
-        sess = RealtimeSession(
-            sentence,
-            sample_rate,
-            filler_audio=None,
-            teacher_id=teacher_id,
-            student_id=student_id,
-        )
-        sessions[sess.id] = sess
+    from .tts import tts_to_file
+
+    filler_text = f"De zin was {sentence}"
+    filler_audio = tts_to_file(filler_text)
+    sess = RealtimeSession(
+        sentence,
+        sample_rate,
+        filler_audio=filler_audio,
+        teacher_id=teacher_id,
+        student_id=student_id,
+    )
+    sessions[sess.id] = sess
     return {
         "session_id": sess.id,
+        "filler_audio": os.path.basename(filler_audio),
         "delay_seconds": config.DELAY_SECONDS,
     }
 
@@ -289,7 +273,7 @@ async def realtime_chunk(sid: str, file: UploadFile = File(...)):
 
 @app.post("/api/realtime/stop/{sid}")
 async def realtime_stop(sid: str):
-    sess = sessions.get(sid)
+    sess = sessions.pop(sid, None)
     if not sess:
         raise HTTPException(status_code=404, detail="Unknown session")
     results = sess.stop()
@@ -342,13 +326,6 @@ async def start_story(theme: str, level: str):
     from .tts import tts_to_file
 
     async def event_stream():
-        global filler_phrase_audio
-        if filler_phrase_audio is None:
-            filler_phrase_audio = tts_to_file("De zin was")
-        yield {
-            "event": "filler",
-            "data": json.dumps({"audio": os.path.basename(filler_phrase_audio)}),
-        }
         total = len(story["section1"]) + len(story["directions"])
         done = 0
         for sent in story["section1"]:

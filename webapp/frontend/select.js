@@ -20,11 +20,9 @@ document.getElementById('start').onclick = () => {
   bar.style.width = '0%';
   const ev = new EventSource(`/api/start_story?theme=${theme}&level=${level}`);
   const data = [];
-  let filler = null;
   ev.addEventListener('progress', e => {
     bar.style.width = (parseFloat(e.data)*100) + '%';
   });
-  ev.addEventListener('filler', e => { filler = JSON.parse(e.data).audio; });
   ev.addEventListener('sentence', e => { data.push({type:'sentence', ...JSON.parse(e.data)}); });
   ev.addEventListener('direction', e => { data.push({type:'direction', ...JSON.parse(e.data)}); });
   ev.addEventListener('complete', () => {
@@ -32,9 +30,6 @@ document.getElementById('start').onclick = () => {
     localStorage.setItem('story_data', JSON.stringify(data));
     localStorage.setItem('theme', theme);
     localStorage.setItem('level', level);
-    if(filler){
-      localStorage.setItem('filler_audio', filler);
-    }
     const q = new URLSearchParams({student_id: studentId, teacher_id: teacherId, name});
     window.location.href = '/static/story.html?' + q.toString();
   });

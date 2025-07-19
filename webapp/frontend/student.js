@@ -12,6 +12,7 @@ let studentName = null;
 let lastFeedbackAudio = null;
 let recordedChunks = [];
 let playbackUrl = null;
+let pendingChunks = [];
 let startPromise = null;
 let analyser;
 let dataArray;
@@ -50,31 +51,6 @@ if(studentName){
   document.getElementById('student_name').textContent = studentName;
 }
 
-function prepareSession(){
-  if(!sentence) return;
-  const ctx = new AudioContext();
-  const fd = new FormData();
-  fd.append('sentence', sentence);
-  fd.append('sample_rate', ctx.sampleRate);
-  fd.append('teacher_id', teacherId);
-  fd.append('student_id', studentId);
-  if(sessionId){
-    fd.append('session_id', sessionId);
-  }
-  startPromise = fetch('/api/realtime/start', {method:'POST', body: fd})
-    .then(async r => {
-      const j = await r.json();
-      if(r.ok){
-        sessionId = j.session_id;
-        delaySeconds = j.delay_seconds;
-      } else {
-        console.error('Realtime start failed', j.detail);
-      }
-    })
-    .finally(()=>{ startPromise = null; ctx.close(); });
-  return startPromise;
-}
-
 
 
 
@@ -95,7 +71,6 @@ nextBtn.onclick = async () => {
   playbackBtn.disabled = true;
   nextBtn.disabled = true;
   prevBtn.disabled = false;
-  prepareSession();
 };
 
 prevBtn.onclick = async () => {
@@ -114,22 +89,41 @@ prevBtn.onclick = async () => {
   if(retryBtn) retryBtn.disabled = true;
   playbackBtn.disabled = true;
   nextBtn.disabled = true;
-  prepareSession();
 };
 
 async function startRecording(){
   if (!sentence) return;
-  if(startPromise){
-    await startPromise;
-  }
-  if(!sessionId){
-    await prepareSession();
-    if(startPromise){
-      await startPromise;
-    }
-  }
   stream = await navigator.mediaDevices.getUserMedia({audio:true});
   audioCtx = new AudioContext();
+  const fd = new FormData();
+  fd.append('sentence', sentence);
+  fd.append('sample_rate', audioCtx.sampleRate);
+  fd.append('teacher_id', teacherId);
+  fd.append('student_id', studentId);
+
+  pendingChunks = [];
+  startPromise = fetch('/api/realtime/start', {method:'POST', body: fd})
+    .then(async r => {
+      const j = await r.json();
+      if(!r.ok){
+        throw new Error(j.detail);
+      }
+      sessionId = j.session_id;
+      fillerAudio = j.filler_audio;
+      delaySeconds = j.delay_seconds;
+      for(const blob of pendingChunks){
+        const f = new FormData();
+        f.append('file', blob, 'chunk.pcm');
+        fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
+      }
+      pendingChunks = [];
+    })
+    .catch(err => {
+      statusEl.textContent = 'Fout: ' + err.message;
+      recording = false;
+      stopVisualizer();
+    })
+    .finally(() => { startPromise = null; });
 
   const source = audioCtx.createMediaStreamSource(stream);
   analyser = audioCtx.createAnalyser();
@@ -153,6 +147,8 @@ async function startRecording(){
       const f = new FormData();
       f.append('file', blob, 'chunk.pcm');
       fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
+    } else {
+      pendingChunks.push(blob);
     }
   };
   recordedChunks = [];
@@ -204,9 +200,10 @@ async function stopRecording(){
       }
       return j;
     });
+  sessionId = null;
   setTimeout(async () => {
     statusEl.innerHTML = '<span class="spinner"></span>Feedback afspelen';
-    const handleFeedback = async () => {
+    playAudio('/api/audio/' + fillerAudio, async () => {
       let data;
       try {
         data = await stopPromise;
@@ -231,13 +228,7 @@ async function stopRecording(){
         if(retryBtn) retryBtn.disabled = false;
       nextBtn.disabled = false;
       prevBtn.disabled = false;
-      audioCtx.close();
-    };
-    if(fillerAudio){
-      playAudio('/api/audio/' + fillerAudio, handleFeedback);
-    } else {
-      await handleFeedback();
-    }
+  });
   }, delaySeconds * 1000);
 }
 
