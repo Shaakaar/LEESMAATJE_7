@@ -170,7 +170,6 @@ function showSentence(){
     playbackBtn.disabled = true;
     nextBtn.disabled = !devMode;
     prevBtn.disabled = storyIndex === 0;
-    prepareSession();
   }
 }
 

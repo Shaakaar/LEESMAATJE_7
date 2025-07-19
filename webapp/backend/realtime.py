@@ -22,7 +22,15 @@ console = Console()
 class RealtimeSession:
     """Manage realtime audio analysis for multiple sentences."""
 
-    def __init__(self, sentence: str, sample_rate: int = 16000, *, filler_audio: str | None = None, teacher_id: int = 0, student_id: int = 0):
+    def __init__(
+        self,
+        sentence: str,
+        sample_rate: int = 16000,
+        *,
+        filler_audio: str | None = None,
+        teacher_id: int = 0,
+        student_id: int = 0
+    ):
         self.audio_q = queue.Queue()
         self.sample_rate = sample_rate
         self.filler_audio = filler_audio
@@ -39,10 +47,12 @@ class RealtimeSession:
             sentence,
             results=self.results,
             realtime=rt.get("azure_pron", True),
+            sample_rate=self.sample_rate,
         )
         self.azure_plain = AzurePlainTranscriber(
             results=self.results,
             realtime=rt.get("azure_plain", True),
+            sample_rate=self.sample_rate,
         )
 
         # Per-sentence wav2vec2 threads
@@ -104,12 +114,12 @@ class RealtimeSession:
     def reset(self, sentence: str):
         """Prepare the session for a new sentence without rebuilding Azure."""
         flush_audio_queue(self.audio_q)
+        self.wavefile.close()
         self._create_results(sentence)
         self._create_wav()
         self.azure_pron.reset_results(self.results)
         self.azure_plain.reset_results(self.results)
         self.azure_pron.update_reference(sentence)
-        self._start_wav_threads()
         if self.azure_pron.realtime:
             self.azure_pron.start()
         if self.azure_plain.realtime:
@@ -120,6 +130,10 @@ class RealtimeSession:
         arr = np.frombuffer(pcm_data, dtype=np.int16)
         self.audio_q.put(arr)
         self.wavefile.writeframes(pcm_data)
+        if self.azure_pron.realtime:
+            self.azure_pron.push_audio(pcm_data)
+        if self.azure_plain.realtime:
+            self.azure_plain.push_audio(pcm_data)
 
     def stop(self) -> Dict[str, Any]:
         """Finalize processing and return results."""
