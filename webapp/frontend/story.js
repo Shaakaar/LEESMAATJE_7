@@ -210,11 +210,10 @@ async function startRecording(){
   if(startPromise){
     await startPromise;
   }
-  if(!sessionId){
-    await prepareSession();
-    if(startPromise){
-      await startPromise;
-    }
+  // Always (re)initialize the session for this sentence
+  await prepareSession();
+  if(startPromise){
+    await startPromise;
   }
   audioCtx = new AudioContext();
 
