@@ -85,6 +85,7 @@ class RealtimeSession:
     def _create_wav(self):
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         self.wav_path = tmp.name
+        tmp.close()
         self.results["audio_file"] = self.wav_path
         self.wavefile = wave.open(self.wav_path, "wb")
         self.wavefile.setnchannels(1)
@@ -112,11 +113,11 @@ class RealtimeSession:
         if self.asr_thread.realtime:
             self.asr_thread.start()
 
-    def reset(self, sentence: str):
+    def reset(self, sentence: str) -> str:
         """Prepare the session for a new sentence without rebuilding Azure."""
         flush_audio_queue(self.audio_q)
         self.wavefile.close()
-        self._create_results(sentence, reuse_id=True)
+        self._create_results(sentence, reuse_id=False)
         self._create_wav()
         self.azure_pron.reset_results(self.results)
         self.azure_plain.reset_results(self.results)
@@ -129,6 +130,7 @@ class RealtimeSession:
             self.azure_pron.start()
         if self.azure_plain.realtime:
             self.azure_plain.start()
+        return self.id
 
     def add_chunk(self, pcm_data: bytes):
         """Add a chunk of 16‑bit mono PCM data."""

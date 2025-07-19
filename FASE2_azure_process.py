@@ -67,8 +67,6 @@ class AzurePronunciationEvaluator:
         self.pa_cfg = pa_cfg
         self._done_event = threading.Event()
         self.recognizer = None
-        if self.realtime:
-            self._create_recognizer()
 
         self._running = False
 
@@ -194,10 +192,11 @@ class AzurePronunciationEvaluator:
         if not self.realtime or self._running:
             return
         self._running = True
-        self._create_recognizer()
+        if self.recognizer is None:
+            self._create_recognizer()
         console.print(
             Panel.fit(
-                f"▶ [bold green]Azure PronunciationEvaluator[/bold green] listening…\n   “[cyan]{self.reference_text}[/cyan]”",
+                f"▶ [bold green]Azure PronunciationEvaluator[/bold green] listening…\n   \u201c[cyan]{self.reference_text}[/cyan]\u201d",
                 border_style="green",
             )
         )
@@ -217,6 +216,8 @@ class AzurePronunciationEvaluator:
         self.recognizer.stop_continuous_recognition()
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Pron stopped.[/red]\n")
+        self.recognizer = None
+        self.stream = None
 
     def process_file(self, wav_path: str):
         """Run pronunciation assessment on a saved WAV."""
@@ -310,8 +311,6 @@ class AzurePlainTranscriber:
         self.stream = None
         self._done_event = threading.Event()
         self.recognizer = None
-        if self.realtime:
-            self._create_recognizer()
 
         self._running = False
         self.results = results
@@ -369,7 +368,8 @@ class AzurePlainTranscriber:
         if not self.realtime or self._running:
             return
         self._running = True
-        self._create_recognizer()
+        if self.recognizer is None:
+            self._create_recognizer()
         console.print(
             Panel.fit(
                 "▶ [bold blue]Azure PlainTranscriber listening…[/bold blue]",
@@ -392,6 +392,8 @@ class AzurePlainTranscriber:
         self.recognizer.stop_continuous_recognition()
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Plain stopped.[/red]\n")
+        self.recognizer = None
+        self.stream = None
 
     def process_file(self, wav_path: str):
         """Transcribe a saved WAV using Azure."""

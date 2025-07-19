@@ -258,7 +258,10 @@ async def realtime_start(
     from .realtime import RealtimeSession
     if session_id and session_id in sessions:
         sess = sessions[session_id]
-        sess.reset(sentence)
+        new_id = sess.reset(sentence)
+        if new_id != session_id:
+            sessions.pop(session_id, None)
+            sessions[new_id] = sess
     else:
         sess = RealtimeSession(
             sentence,
