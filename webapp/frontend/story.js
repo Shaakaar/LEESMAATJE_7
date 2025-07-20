@@ -114,7 +114,7 @@ function showSentence(){
     progressBar.style.width = (((storyIndex+2) / storyData.length) * 100) + '%';
     progressText.textContent = `${storyIndex+2}/${storyData.length}`;
     micWrapper.style.display = 'none';
-    playbackBtn.style.display = 'none';
+      playbackBtn.hidden = true;
     if(retryBtn) retryBtn.style.display = 'none';
     micBtn.disabled = true;
     nextBtn.disabled = !devMode;
@@ -135,13 +135,13 @@ function showSentence(){
     progressBar.style.width = (((storyIndex+1) / storyData.length) * 100) + '%';
     progressText.textContent = `${storyIndex+1}/${storyData.length}`;
     micWrapper.style.display = '';
-    playbackBtn.style.display = '';
     if(retryBtn){
       retryBtn.style.display = '';
       retryBtn.disabled = true;
     }
     micBtn.disabled = false;
     playbackBtn.disabled = true;
+    playbackBtn.hidden = true;
     nextBtn.disabled = !devMode;
     prevBtn.disabled = storyIndex === 0;
   }
@@ -248,6 +248,7 @@ async function startRecording(){
   micBtn.querySelector('.label').textContent = 'Luisteren...';
   if(retryBtn) retryBtn.disabled = true;
   playbackBtn.disabled = true;
+  playbackBtn.hidden = true;
   nextBtn.disabled = !devMode;
   statusEl.innerHTML = '<span class="spinner"></span>Opnemen';
 }
@@ -312,6 +313,7 @@ async function stopRecording(){
       statusEl.textContent = '';
       micBtn.disabled = false;
       micBtn.querySelector('.label').textContent = 'Opnemen';
+      playbackBtn.hidden = false;
       playbackBtn.disabled = false;
       if(retryBtn) retryBtn.disabled = false;
       nextBtn.disabled = false;
@@ -435,6 +437,7 @@ if(retryBtn){
     micBtn.disabled = false;
     micBtn.querySelector('.label').textContent = 'Opnemen';
     playbackBtn.disabled = true;
+    playbackBtn.hidden = true;
     retryBtn.disabled = true;
     nextBtn.disabled = !devMode;
   };
