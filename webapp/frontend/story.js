@@ -30,10 +30,15 @@ const waveCanvas = document.getElementById('mic_waveform');
 const waveCtx = waveCanvas.getContext('2d');
 const playbackBtn = document.getElementById('playback');
 const retryBtn = document.getElementById('retry');
-const nextBtn = document.getElementById('next');
-const prevBtn = document.getElementById('prev');
+const nextBtn = document.getElementById('nextBtn');
+const prevBtn = document.getElementById('prevBtn');
 const overlay = document.getElementById('loading_overlay');
 progressText.textContent = '';
+
+function updateNavButtons(index, max){
+  prevBtn.disabled = index === 0;
+  nextBtn.disabled = index === max - 1;
+}
 
 function showOverlay(){ overlay.style.display = 'flex'; }
 function hideOverlay(){ overlay.style.display = 'none'; }
@@ -117,8 +122,6 @@ function showSentence(){
       playbackBtn.hidden = true;
     if(retryBtn) retryBtn.style.display = 'none';
     micBtn.disabled = true;
-    nextBtn.disabled = !devMode;
-    prevBtn.disabled = storyIndex === 0;
   } else {
     sentence = item.text;
     const p = document.createElement('p');
@@ -142,9 +145,8 @@ function showSentence(){
     micBtn.disabled = false;
     playbackBtn.disabled = true;
     playbackBtn.hidden = true;
-    nextBtn.disabled = !devMode;
-    prevBtn.disabled = storyIndex === 0;
   }
+  updateNavButtons(storyIndex, storyData.length);
 }
 
 
@@ -318,6 +320,7 @@ async function stopRecording(){
       if(retryBtn) retryBtn.disabled = false;
       nextBtn.disabled = false;
       prevBtn.disabled = false;
+      updateNavButtons(storyIndex, storyData.length);
   });
   }, delaySeconds * 1000);
 }
