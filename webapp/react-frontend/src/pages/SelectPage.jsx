@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 export default function SelectPage() {
   const params = new URLSearchParams(window.location.search);
@@ -36,24 +36,26 @@ export default function SelectPage() {
   };
 
   return (
-    <div className="p-4 max-w-md mx-auto space-y-2">
-      <h2 className="text-xl mb-2">Welkom {name}</h2>
-      <div>
-        <label className="block mb-1">Thema</label>
-        <select className="w-full p-2 border" value={theme} onChange={(e) => setTheme(e.target.value)}>
+    <div>
+      <div className="top-bar">
+        <h1>Leesmaatje</h1>
+        <span id="student_name">{name}</span>
+        <button id="logout" className="accent" onClick={() => (window.location.href = '/')}>Uitloggen</button>
+      </div>
+      <div className="ui-pane">
+        <label htmlFor="theme">Kies thema:</label>
+        <select id="theme" value={theme} onChange={(e) => setTheme(e.target.value)}>
           <option value="animals">Dieren</option>
         </select>
-      </div>
-      <div>
-        <label className="block mb-1">Niveau</label>
-        <select className="w-full p-2 border" value={level} onChange={(e) => setLevel(e.target.value)}>
+        <label htmlFor="level">Kies niveau:</label>
+        <select id="level" value={level} onChange={(e) => setLevel(e.target.value)}>
           <option value="easy">Makkelijk</option>
         </select>
+        <button id="start" className="primary" onClick={start}>Start</button>
+        <div className="progress">
+          <div id="load_bar" className="progress-bar"></div>
+        </div>
       </div>
-      <div className="h-2 bg-gray-200 rounded">
-        <div id="load_bar" className="h-full bg-blue-500" style={{ width: '0%' }}></div>
-      </div>
-      <button className="w-full bg-blue-500 text-white p-2" onClick={start}>Start</button>
     </div>
   );
 }

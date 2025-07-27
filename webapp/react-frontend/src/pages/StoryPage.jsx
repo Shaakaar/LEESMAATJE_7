@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 export default function StoryPage() {
   const params = new URLSearchParams(window.location.search);
   const studentId = params.get('student_id');
-  const teacherId = params.get('teacher_id');
+  const _teacherId = params.get('teacher_id');
   const name = params.get('name');
-  const [data, setData] = useState(() => JSON.parse(localStorage.getItem('story_data') || '[]'));
+  const [data, _setData] = useState(() => JSON.parse(localStorage.getItem('story_data') || '[]'));
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -22,22 +22,30 @@ export default function StoryPage() {
   if (!item) return null;
 
   return (
-    <div className="p-4 max-w-xl mx-auto">
-      <div className="mb-2">{name}</div>
-      <div className="border p-4 rounded mb-2">
-        {item.text}
-        {item.audio && (
-          <button className="ml-2" onClick={() => new Audio('/api/audio/' + item.audio).play()}>
-            ▶
-          </button>
-        )}
+    <div>
+      <div className="top-bar">
+        <h1>Leesmaatje</h1>
+        <span>{name}</span>
+        <button id="logout" className="accent" onClick={() => (window.location.href = '/')}>Uitloggen</button>
       </div>
-      <div className="flex space-x-2">
-        <button className="p-2 border" onClick={prev} id="prevBtn">Vorige</button>
-        <button className="p-2 border" onClick={next} id="nextBtn">Volgende</button>
-      </div>
-      <div className="mt-2 text-sm">
-        {index + 1}/{data.length}
+      <div className="ui-pane">
+        <label htmlFor="sentence" className="sentence-label">Zin om te lezen:</label>
+        <div id="sentence" className="card">
+          {item.text}
+          {item.audio && (
+            <button className="ml-2" onClick={() => new Audio('/api/audio/' + item.audio).play()}>▶</button>
+          )}
+        </div>
+        <div className="progress">
+          <div id="progress_bar" className="progress-bar" style={{ width: ((index + 1) / data.length) * 100 + '%' }}></div>
+        </div>
+        <div className="progress-text">
+          {index + 1}/{data.length}
+        </div>
+        <div className="nav-row">
+          <button id="prevBtn" className="nav-btn" onClick={prev} disabled={data.length <= 1}>Vorige</button>
+          <button id="nextBtn" className="nav-btn" onClick={next}>Volgende</button>
+        </div>
       </div>
     </div>
   );

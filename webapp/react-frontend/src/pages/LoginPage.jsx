@@ -81,83 +81,97 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="p-4 max-w-md mx-auto">
-      <header className="text-center mb-4">
-        <h1 className="text-2xl font-bold">Leesmaatje</h1>
+    <div>
+      <header className="logo">
+        <h1>Leesmaatje</h1>
       </header>
-      <div className="flex mb-4">
-        <button
-          className={`flex-1 p-2 border ${tab === 'student' ? 'bg-blue-300' : ''}`}
-          onClick={() => setTab('student')}
-        >
-          Leerling
-        </button>
-        <button
-          className={`flex-1 p-2 border ${tab === 'teacher' ? 'bg-blue-300' : ''}`}
-          onClick={() => setTab('teacher')}
-        >
-          Leraar
-        </button>
-      </div>
-      {tab === 'student' ? (
-        <div className="space-y-2">
-          <input
-            className="w-full p-2 border"
-            placeholder="Gebruikersnaam"
-            value={studentUser}
-            onChange={(e) => setStudentUser(e.target.value)}
-          />
-          <input
-            className="w-full p-2 border"
-            type="password"
-            placeholder="Wachtwoord"
-            value={studentPass}
-            onChange={(e) => setStudentPass(e.target.value)}
-          />
-          <input
-            className="w-full p-2 border"
-            placeholder="Klascode"
-            value={teacherId}
-            onChange={(e) => setTeacherId(e.target.value)}
-          />
-          <button className="w-full bg-blue-500 text-white p-2" onClick={loginStudent}>
-            Inloggen
+      <div className="login-card">
+        <div className="tabs">
+          <button
+            id="show_student"
+            className={tab === 'student' ? 'active' : ''}
+            onClick={() => setTab('student')}
+          >
+            Leerling
           </button>
           <button
-            className={`w-full p-2 border ${practice ? 'bg-green-200' : ''}`}
-            onClick={() => setPractice(!practice)}
+            id="show_teacher"
+            className={tab === 'teacher' ? 'active' : ''}
+            onClick={() => setTab('teacher')}
           >
-            Oefenen zonder code
-          </button>
-          <button className="w-full p-2 border" onClick={registerStudent}>
-            Registreren
+            Leraar
           </button>
         </div>
-      ) : (
-        <div className="space-y-2">
-          <input
-            className="w-full p-2 border"
-            placeholder="Gebruikersnaam"
-            value={teacherUser}
-            onChange={(e) => setTeacherUser(e.target.value)}
-          />
-          <input
-            className="w-full p-2 border"
-            type="password"
-            placeholder="Wachtwoord"
-            value={teacherPass}
-            onChange={(e) => setTeacherPass(e.target.value)}
-          />
-          <button className="w-full bg-blue-500 text-white p-2" onClick={loginTeacher}>
-            Inloggen
-          </button>
-          <button className="w-full p-2 border" onClick={registerTeacher}>
-            Registreren
-          </button>
-        </div>
-      )}
-      {message && <div className="mt-4 text-red-600">{message}</div>}
-      {loading && <div className="mt-4">Laden...</div>}
+        {tab === 'student' ? (
+          <div className="login-pane">
+            <input
+              id="stu_user"
+              placeholder="Gebruikersnaam"
+              value={studentUser}
+              onChange={(e) => setStudentUser(e.target.value)}
+            />
+            <input
+              id="stu_pass"
+              type="password"
+              placeholder="Wachtwoord"
+              value={studentPass}
+              onChange={(e) => setStudentPass(e.target.value)}
+            />
+            <input
+              id="stu_teacher"
+              placeholder="Klascode"
+              value={teacherId}
+              onChange={(e) => setTeacherId(e.target.value)}
+            />
+            <button id="stu_login" className="primary" onClick={loginStudent}>
+              Inloggen
+            </button>
+            <button
+              id="stu_practice"
+              className={`accent toggle-btn ${practice ? 'active' : ''}`}
+              onClick={() => setPractice(!practice)}
+            >
+              Oefenen zonder code
+            </button>
+            <button id="stu_register" className="accent" onClick={registerStudent}>
+              Registreren
+            </button>
+          </div>
+        ) : (
+          <div className="login-pane">
+            <input
+              id="teach_user"
+              placeholder="Gebruikersnaam"
+              value={teacherUser}
+              onChange={(e) => setTeacherUser(e.target.value)}
+            />
+            <input
+              id="teach_pass"
+              type="password"
+              placeholder="Wachtwoord"
+              value={teacherPass}
+              onChange={(e) => setTeacherPass(e.target.value)}
+            />
+            <button id="teach_login" className="primary" onClick={loginTeacher}>
+              Inloggen
+            </button>
+            <button id="teach_register" className="accent" onClick={registerTeacher}>
+              Registreren
+            </button>
+          </div>
+        )}
+        {message && (
+          <div id="message" className="error">
+            {message}
+          </div>
+        )}
+        {loading && (
+          <div id="loading_overlay" className="loading-overlay">
+            <span className="spinner"></span>
+            <span>Laden...</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
