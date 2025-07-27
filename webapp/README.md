@@ -6,9 +6,9 @@ streams the learner's speech to the backend where pronunciation is analysed
 and GPT generates encouraging feedback.  All backend parameters live in
 `backend/config.py` and are not exposed to the frontend.
 
-The backend uses FastAPI and serves a React frontend built with Vite.
-Audio is streamed to the server in realtime while recording so analysis can
-start immediately. Once recording stops the backend finalizes the analysis and
+The backend uses FastAPI and serves a small JavaScript frontend. Audio is
+streamed to the server in realtime while recording so analysis can start
+immediately. Once recording stops the backend finalizes the analysis and
 returns GPT feedback.
 
 The GPT provider, model and temperature used for feedback can be
@@ -23,15 +23,6 @@ set to `"azure"` the environment variables `AZURE_OPENAI_ENDPOINT`,
 point to your Azure OpenAI deployment.
 
 ## Running
-
-```bash
-cd react-frontend
-npm install
-npm run build
-cd ..
-```
-
-Then start the backend:
 
 ```bash
 python -m uvicorn webapp.backend.main:app --reload --no-access-log
