@@ -43,6 +43,11 @@ frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend")
 
 # Serve the main frontend assets
 app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+app.mount(
+    "/static/react",
+    StaticFiles(directory=os.path.join(frontend_dir, "../frontend-react/dist")),
+    name="react",
+)
 # Serve the bundled Lucide icon font
 app.mount(
     "/static/lucide",
@@ -107,6 +112,17 @@ async def login_student(
 async def root():
     index_path = os.path.join(os.path.dirname(__file__), "../frontend/index.html")
     return HTMLResponse(open(index_path).read())
+
+
+@app.get("/login")
+async def login_page(request: Request):
+    react = request.query_params.get("ui") == "react"
+    file = (
+        os.path.join(frontend_dir, "../frontend-react/dist/index.html")
+        if react
+        else os.path.join(frontend_dir, "index.html")
+    )
+    return FileResponse(file)
 
 
 @app.post("/api/initialize_models")

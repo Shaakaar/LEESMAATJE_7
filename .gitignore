@@ -1,3 +1,5 @@
 __pycache__/
 webapp/backend/storage/
+# React build artefacts
+frontend-react/dist
 
