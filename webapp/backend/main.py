@@ -39,19 +39,16 @@ app.add_middleware(
 )
 
 # Directory containing the frontend files that are served statically
-frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend")
+current_dir = os.path.dirname(os.path.abspath(__file__))
+frontend_dir = os.path.abspath(os.path.join(current_dir, "../frontend"))
+react_dir = os.path.abspath(os.path.join(current_dir, "../../frontend-react/dist"))
+
+print(f"Static frontend directory: {frontend_dir}")
+print(f"React build directory: {react_dir}")
 
 # Serve the main frontend assets
 app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
-app.mount(
-    "/static/react",
-    StaticFiles(
-        directory=os.path.join(
-            os.path.dirname(__file__), "../../frontend-react/dist"
-        )
-    ),
-    name="react",
-)
+app.mount("/static/react", StaticFiles(directory=react_dir), name="react")
 # Serve the bundled Lucide icon font
 app.mount(
     "/static/lucide",
@@ -127,7 +124,7 @@ async def login_page(request: Request):
     use_legacy = request.query_params.get("ui") == "legacy"
 
     file = (
-        os.path.join(os.path.dirname(__file__), "../../frontend-react/dist/index.html")
+        os.path.join(react_dir, "index.html")
         if not use_legacy
         else os.path.join(frontend_dir, "index.html")
     )
