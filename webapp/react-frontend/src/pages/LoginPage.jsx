@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function LoginPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('student');
   const [studentUser, setStudentUser] = useState('');
   const [studentPass, setStudentPass] = useState('');
@@ -31,7 +33,7 @@ export default function LoginPage() {
         name: studentUser,
       });
       if (j.teacher_id !== null) params.append('teacher_id', j.teacher_id);
-      window.location.href = '/static/select.html?' + params.toString();
+      navigate('/static/select.html?' + params.toString());
     } else {
       const j = await r.json();
       setMessage(j.detail || 'Login mislukt');
@@ -61,7 +63,7 @@ export default function LoginPage() {
     if (r.ok) {
       const j = await r.json();
       const params = new URLSearchParams({ teacher_id: j.teacher_id });
-      window.location.href = '/static/teacher.html?' + params.toString();
+      navigate('/static/teacher.html?' + params.toString());
     } else {
       setMessage('Leraar inloggen mislukt');
     }
