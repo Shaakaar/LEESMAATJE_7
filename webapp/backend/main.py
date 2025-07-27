@@ -45,7 +45,11 @@ frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend")
 app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 app.mount(
     "/static/react",
-    StaticFiles(directory=os.path.join(frontend_dir, "../frontend-react/dist")),
+    StaticFiles(
+        directory=os.path.join(
+            os.path.dirname(__file__), "../../frontend-react/dist"
+        )
+    ),
     name="react",
 )
 # Serve the bundled Lucide icon font
@@ -118,7 +122,9 @@ async def root():
 async def login_page(request: Request):
     react = request.query_params.get("ui") == "react"
     file = (
-        os.path.join(frontend_dir, "../frontend-react/dist/index.html")
+        os.path.join(
+            os.path.dirname(__file__), "../../frontend-react/dist/index.html"
+        )
         if react
         else os.path.join(frontend_dir, "index.html")
     )
