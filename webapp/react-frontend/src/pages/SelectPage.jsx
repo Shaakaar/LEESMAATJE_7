@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function SelectPage() {
+  const navigate = useNavigate();
   const params = new URLSearchParams(window.location.search);
   const studentId = params.get('student_id');
   const teacherId = params.get('teacher_id');
@@ -8,7 +10,7 @@ export default function SelectPage() {
   const [theme, setTheme] = useState('animals');
   const [level, setLevel] = useState('easy');
   if (!studentId) {
-    window.location.href = '/';
+    navigate('/');
   }
 
   const start = () => {
@@ -31,7 +33,7 @@ export default function SelectPage() {
       localStorage.setItem('theme', theme);
       localStorage.setItem('level', level);
       const q = new URLSearchParams({ student_id: studentId, teacher_id: teacherId, name });
-      window.location.href = '/static/story.html?' + q.toString();
+      navigate('/static/story.html?' + q.toString());
     });
   };
 
@@ -40,7 +42,7 @@ export default function SelectPage() {
       <div className="top-bar">
         <h1>Leesmaatje</h1>
         <span id="student_name">{name}</span>
-        <button id="logout" className="accent" onClick={() => (window.location.href = '/')}>Uitloggen</button>
+        <button id="logout" className="accent" onClick={() => navigate('/')}>Uitloggen</button>
       </div>
       <div className="ui-pane">
         <label htmlFor="theme">Kies thema:</label>

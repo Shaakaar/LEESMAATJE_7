@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function StoryPage() {
+  const navigate = useNavigate();
   const params = new URLSearchParams(window.location.search);
   const studentId = params.get('student_id');
   const _teacherId = params.get('teacher_id');
@@ -10,7 +12,7 @@ export default function StoryPage() {
 
   useEffect(() => {
     if (!studentId || !data.length) {
-      window.location.href = '/';
+      navigate('/');
     }
   }, [studentId, data]);
 
@@ -26,7 +28,7 @@ export default function StoryPage() {
       <div className="top-bar">
         <h1>Leesmaatje</h1>
         <span>{name}</span>
-        <button id="logout" className="accent" onClick={() => (window.location.href = '/')}>Uitloggen</button>
+        <button id="logout" className="accent" onClick={() => navigate('/')}>Uitloggen</button>
       </div>
       <div className="ui-pane">
         <label htmlFor="sentence" className="sentence-label">Zin om te lezen:</label>

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function StudentResultsPage() {
+  const navigate = useNavigate();
   const params = new URLSearchParams(window.location.search);
   const studentId = params.get('student_id');
   const studentName = params.get('name');
@@ -8,7 +10,7 @@ export default function StudentResultsPage() {
 
   useEffect(() => {
     if (!studentId) {
-      window.location.href = '/';
+      navigate('/');
       return;
     }
     fetch('/api/student_results/' + studentId)
@@ -21,7 +23,7 @@ export default function StudentResultsPage() {
       <div className="top-bar">
         <h1>Leesmaatje</h1>
         <span id="student_name_bar">{studentName}</span>
-        <button id="logout" className="accent" onClick={() => (window.location.href = '/')}>Uitloggen</button>
+        <button id="logout" className="accent" onClick={() => navigate('/')}>Uitloggen</button>
       </div>
       <div className="results-container">
         <h2>Oefenresultaten</h2>
