@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 import json
 from fastapi.staticfiles import StaticFiles
@@ -114,18 +114,23 @@ async def login_student(
 
 @app.get("/")
 async def root():
-    index_path = os.path.join(os.path.dirname(__file__), "../frontend/index.html")
-    return HTMLResponse(open(index_path).read())
+    """Redirect to the React-based login page."""
+    return RedirectResponse("/login")
 
 
 @app.get("/login")
-async def login_page(request: Request):
-    react = request.query_params.get("ui") == "react"
+async def login_page(request: Request | None = None):
+    """Serve the React login page by default.
+
+    The old HTML page can still be accessed via ``/login?ui=legacy`` if needed.
+    """
+    use_legacy = False
+    if request is not None:
+        use_legacy = request.query_params.get("ui") == "legacy"
+
     file = (
-        os.path.join(
-            os.path.dirname(__file__), "../../frontend-react/dist/index.html"
-        )
-        if react
+        os.path.join(os.path.dirname(__file__), "../../frontend-react/dist/index.html")
+        if not use_legacy
         else os.path.join(frontend_dir, "index.html")
     )
     return FileResponse(file)
