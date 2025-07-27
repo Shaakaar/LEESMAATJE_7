@@ -119,14 +119,12 @@ async def root():
 
 
 @app.get("/login")
-async def login_page(request: Request | None = None):
+async def login_page(request: Request):
     """Serve the React login page by default.
 
     The old HTML page can still be accessed via ``/login?ui=legacy`` if needed.
     """
-    use_legacy = False
-    if request is not None:
-        use_legacy = request.query_params.get("ui") == "legacy"
+    use_legacy = request.query_params.get("ui") == "legacy"
 
     file = (
         os.path.join(os.path.dirname(__file__), "../../frontend-react/dist/index.html")
