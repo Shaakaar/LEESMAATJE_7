@@ -8,7 +8,11 @@ module.exports = {
         success: '#A3E635',
         error: '#FB7185',
       },
-      fontFamily: { title: ['"Fredoka"', 'cursive'] },
+      fontFamily: {
+        sans: ['var(--font-body)', 'sans-serif'],
+        display: ['var(--font-display)', 'sans-serif'],
+        title: ['var(--font-display)', 'sans-serif'],
+      },
     },
   },
   plugins: [],
