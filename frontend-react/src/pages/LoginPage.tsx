@@ -23,8 +23,9 @@ export default function LoginPage() {
         name: fd.get('username') as string,
       });
       window.location.href = `/static/select.html?${q.toString()}`;
-    } catch (err: any) {
-      toast({ title: 'Fout', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ title: 'Fout', description: message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -39,8 +40,9 @@ export default function LoginPage() {
       if (!r.ok) throw new Error('Inloggen mislukt');
       const j = await r.json();
       window.location.href = `/static/teacher.html?teacher_id=${j.teacher_id}`;
-    } catch (err: any) {
-      toast({ title: 'Fout', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ title: 'Fout', description: message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
