@@ -40,7 +40,7 @@ app.add_middleware(
 
 # Directory containing the frontend files that are served statically
 current_dir = os.path.dirname(os.path.abspath(__file__))
-frontend_dir = os.path.abspath(os.path.join(current_dir, "../frontend"))
+frontend_dir = os.path.abspath(os.path.join(current_dir, "../frontend-legacy"))
 react_dir = os.path.abspath(os.path.join(current_dir, "../../frontend-react/dist"))
 
 # Log frontend paths for debugging
