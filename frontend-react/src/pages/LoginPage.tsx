@@ -2,12 +2,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import AppShell from '@/components/layout/AppShell';
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast, ToastViewport } from '@/components/ui/toast';
+import LoadingOverlay from '@/components/LoadingOverlay';
+import { ModelInitContext } from '@/lib/ModelInitContext';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const { ready } = useContext(ModelInitContext);
 
   async function studentLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -51,6 +54,7 @@ export default function LoginPage() {
   return (
     <AppShell>
       <ToastViewport />
+      <LoadingOverlay show={!ready} />
       <div className="w-full max-w-md p-6 bg-white rounded-2xl shadow-lg">
         <Tabs defaultValue="student" className="w-full space-y-6">
           <TabsList className="grid grid-cols-2">
@@ -59,10 +63,10 @@ export default function LoginPage() {
           </TabsList>
           <TabsContent value="student">
             <form onSubmit={studentLogin} className="space-y-4">
-              <Input name="username" placeholder="Gebruikersnaam" required />
-              <Input name="password" type="password" placeholder="Wachtwoord" required />
-              <Input name="teacher_id" placeholder="Klascode" />
-              <Button className="w-full" disabled={loading}>
+              <Input name="username" placeholder="Gebruikersnaam" required disabled={!ready} />
+              <Input name="password" type="password" placeholder="Wachtwoord" required disabled={!ready} />
+              <Input name="teacher_id" placeholder="Klascode" disabled={!ready} />
+              <Button className="w-full" disabled={!ready || loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Inloggen
               </Button>
@@ -70,9 +74,9 @@ export default function LoginPage() {
           </TabsContent>
           <TabsContent value="teacher">
             <form onSubmit={teacherLogin} className="space-y-4">
-              <Input name="username" placeholder="Gebruikersnaam" required />
-              <Input name="password" type="password" placeholder="Wachtwoord" required />
-              <Button className="w-full" disabled={loading}>
+              <Input name="username" placeholder="Gebruikersnaam" required disabled={!ready} />
+              <Input name="password" type="password" placeholder="Wachtwoord" required disabled={!ready} />
+              <Button className="w-full" disabled={!ready || loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Inloggen
               </Button>
