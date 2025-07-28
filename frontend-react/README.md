@@ -19,7 +19,7 @@ src/
 Levels and themes are currently derived from
 `webapp/backend/config.py::STORIES`. Once the backend exposes an API for
 these, update `src/lib/themeData.ts` to fetch them dynamically and adjust
-`CircularRibbon`/`LevelPage` accordingly.
+`LevelMap`/`LevelPage` accordingly.
 
 ### Scripts
 

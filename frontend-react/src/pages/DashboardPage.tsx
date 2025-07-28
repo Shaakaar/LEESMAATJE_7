@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
-import CircularRibbon from '@/components/CircularRibbon';
+import LevelMap from '@/components/level-map/LevelMap';
 import WeeklyGoalBar from '@/components/WeeklyGoalBar';
 import { Card } from '@/components/ui/card';
 import { useAuthStore } from '@/lib/useAuthStore';
@@ -39,7 +39,7 @@ export default function DashboardPage() {
     <AppShell>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 w-full max-w-xl">
         <h2 className="text-center text-2xl font-title">Welkom terug, {name}!</h2>
-        <CircularRibbon current={1} onSelect={selectLevel} />
+        <LevelMap current={1} onSelect={selectLevel} />
         <Card className="p-4 space-y-2">
           <h3 className="font-semibold">Mijn voortgang</h3>
           <WeeklyGoalBar minutes={minutes} />
