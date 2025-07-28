@@ -343,7 +343,20 @@ async def start_story(theme: str, level: str):
 
     Returns events in Server Sent Event format to report progress.
     """
-    story = config.STORIES.get(theme, {}).get(level)
+    levels = config.STORIES.get(theme)
+    if not levels:
+        raise HTTPException(status_code=400, detail="Story not found")
+
+    story = levels.get(level)
+    if not story:
+        # If level is numeric, allow indexing into the level dict
+        if level.isdigit():
+            idx = int(level) - 1
+            if 0 <= idx < len(levels):
+                story = list(levels.values())[idx]
+        # Fallback: if there is only one level defined, use that
+        if not story and len(levels) == 1:
+            story = next(iter(levels.values()))
     if not story:
         raise HTTPException(status_code=400, detail="Story not found")
 
