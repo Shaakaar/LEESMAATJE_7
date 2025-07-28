@@ -7,10 +7,14 @@ import { Loader2 } from 'lucide-react';
 import { toast, ToastViewport } from '@/components/ui/toast';
 import LoadingOverlay from '@/components/LoadingOverlay';
 import { ModelInitContext } from '@/lib/ModelInitContext';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/lib/useAuthStore';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { ready } = useContext(ModelInitContext);
+  const navigate = useNavigate();
+  const { login } = useAuthStore();
 
   async function studentLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -20,12 +24,12 @@ export default function LoginPage() {
       const r = await fetch('/api/login_student', { method: 'POST', body: fd });
       if (!r.ok) throw new Error((await r.json()).detail);
       const j = await r.json();
-      const q = new URLSearchParams({
-        student_id: j.student_id,
-        teacher_id: j.teacher_id ?? '',
+      login({
+        studentId: j.student_id,
+        teacherId: j.teacher_id ?? null,
         name: fd.get('username') as string,
       });
-      window.location.href = `/static/select.html?${q.toString()}`;
+      navigate('/dashboard');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       toast({ title: 'Fout', description: message, variant: 'destructive' });
