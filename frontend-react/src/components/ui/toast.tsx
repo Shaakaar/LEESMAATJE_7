@@ -22,6 +22,7 @@ const useToastStore = create<ToastState>((set) => ({
   remove: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function toast(t: Omit<ToastItem, 'id'>) {
   useToastStore.getState().add(t);
 }
