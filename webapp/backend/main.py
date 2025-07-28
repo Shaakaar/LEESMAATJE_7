@@ -43,12 +43,14 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 frontend_dir = os.path.abspath(os.path.join(current_dir, "../frontend"))
 react_dir = os.path.abspath(os.path.join(current_dir, "../../frontend-react/dist"))
 
+# Log frontend paths for debugging
 print(f"Static frontend directory: {frontend_dir}")
 print(f"React build directory: {react_dir}")
 
-# Serve the main frontend assets
-app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+# Serve the React build before the legacy frontend so that
+# requests to ``/static/react`` aren't intercepted by the ``/static`` mount.
 app.mount("/static/react", StaticFiles(directory=react_dir), name="react")
+app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 # Serve the bundled Lucide icon font
 app.mount(
     "/static/lucide",
