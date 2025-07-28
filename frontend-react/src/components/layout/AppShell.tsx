@@ -5,7 +5,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 bg-white shadow-sm">
-        <h1 className="font-title text-2xl text-primary">Leesmaatje</h1>
+        <h1 className="font-display font-bold tracking-[-0.5px] text-2xl text-primary">Leesmaatje</h1>
         <Button
           size="sm"
           variant="secondary"

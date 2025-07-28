@@ -1,3 +1,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --font-display: 'Rubik', sans-serif;
+    --font-body: 'Nunito', sans-serif;
+  }
+
+  body {
+    @apply font-sans font-normal;
+    font-family: var(--font-body);
+  }
+}

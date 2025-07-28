@@ -1,12 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600&family=Rubik:wght@700&display=swap');
+
 :root {
   --primary:#4F8CFF;
   --accent:#55C2A7;
   --bg:#F3FAFF;
   --text:#022B3A;
+  --font-display:'Rubik', sans-serif;
+  --font-body:'Nunito', sans-serif;
 }
 
 body {
-  font-family: 'Nunito Sans', sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
   text-align: center;
@@ -15,7 +19,9 @@ body {
 }
 
 h1,h2,h3 {
-  font-family: 'Baloo 2', cursive;
+  font-family: var(--font-display);
+  font-weight:700;
+  letter-spacing:-0.5px;
   margin:0 0 1rem;
 }
 

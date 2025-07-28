@@ -26,7 +26,7 @@ export function TabsTrigger({ value, className, children, ...props }: React.Butt
   return (
     <button
       className={cn(
-        'px-3 py-2 text-sm font-medium rounded-t-md border-b-2',
+        'px-3 py-2 text-sm font-semibold rounded-t-md border-b-2',
         active ? 'border-primary text-primary' : 'border-transparent text-slate-600',
         className
       )}
