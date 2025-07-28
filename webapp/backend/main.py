@@ -463,3 +463,11 @@ async def continue_story(theme: str, level: str, direction: str, mistakes: str |
         yield {"event": "complete", "data": "ok"}
 
     return EventSourceResponse(event_stream())
+
+# Fallback route to serve the React app for unknown frontend routes
+@app.get("/{full_path:path}")
+async def react_app(full_path: str):
+    """Serve the React SPA index file."""
+    if full_path.startswith("api") or full_path.startswith("static"):
+        raise HTTPException(status_code=404)
+    return FileResponse(os.path.join(react_dir, "index.html"))
