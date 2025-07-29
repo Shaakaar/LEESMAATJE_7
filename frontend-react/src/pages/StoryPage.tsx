@@ -6,7 +6,6 @@ import ProgressBar from '@/components/story/ProgressBar';
 import MicButton from '@/components/story/MicButton';
 import NavButton from '@/components/story/NavButton';
 import FeedbackToast from '@/components/story/FeedbackToast';
-import FeedbackMessage from '@/components/story/FeedbackMessage';
 import DirectionsChooser from '@/components/story/DirectionsChooser';
 import { useRecorder } from '@/hooks/useRecorder';
 import { useStory } from '@/hooks/useStory';
@@ -41,12 +40,6 @@ export default function StoryPage() {
     <AppShell>
       <div className="w-full max-w-xl bg-gradient-to-b from-primary/5 to-primary/0 p-6 rounded-2xl">
         <SentenceCard item={item?.type === 'sentence' ? item : null} />
-        {rec.lastFeedback && (
-          <FeedbackMessage
-            text={rec.lastFeedback.feedback_text.replace(/\*\*(.*?)\*\*/g, '<strong class="highlight">$1</strong>')}
-            positive={rec.lastFeedback.correct !== false}
-          />
-        )}
         {directionOpts && (
           <DirectionsChooser
             options={directionOpts}

@@ -171,9 +171,6 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
     recorded.current = [];
     fillerAudio.current = null;
     setLastFeedback(data);
-    if (data.feedback_audio) {
-      new Audio('/api/audio/' + data.feedback_audio).play();
-    }
   }, [isRecording]);
 
   const replayFeedback = useCallback(() => {
