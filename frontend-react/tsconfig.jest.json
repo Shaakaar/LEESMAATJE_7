@@ -6,7 +6,8 @@
     "noEmit": false,
     "verbatimModuleSyntax": false,
     "esModuleInterop": true,
-    "outDir": "./node_modules/.tmp/ts-jest"
+    "outDir": "./node_modules/.tmp/ts-jest",
+    "types": ["@testing-library/jest-dom"]
   },
   "include": ["src", "src/__tests__/**/*"]
 }
