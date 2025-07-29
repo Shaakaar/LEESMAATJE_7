@@ -27,7 +27,6 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
   const delaySeconds = useRef<number>(0);
   const recorded = useRef<Int16Array[]>([]);
   const pendingChunks = useRef<Blob[]>([]);
-  const workletLoaded = useRef(false);
 
   const visualize = useCallback(() => {
     if (!isRecordingRef.current) return;
@@ -52,12 +51,9 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
     analyser.current = audioCtx.current.createAnalyser();
     analyser.current.fftSize = 512;
     dataArray.current = new Uint8Array(analyser.current.fftSize);
-    if (!workletLoaded.current) {
-      await audioCtx.current.audioWorklet.addModule(
-        import.meta.env.BASE_URL + 'recorder-worklet.js',
-      );
-      workletLoaded.current = true;
-    }
+    await audioCtx.current.audioWorklet.addModule(
+      import.meta.env.BASE_URL + 'recorder-worklet.js',
+    );
     processor.current = new AudioWorkletNode(audioCtx.current, 'recorder-processor');
     source.connect(analyser.current);
     analyser.current.connect(processor.current);
@@ -171,9 +167,15 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
       pos += c.length;
     }
     if (audioCtx.current) {
-      const wav = encodeWav(flat, audioCtx.current.sampleRate);
+      const sr = audioCtx.current.sampleRate;
+      const wav = encodeWav(flat, sr);
       const url = URL.createObjectURL(wav);
       setPlaybackUrl(url);
+      audioCtx.current.close();
+      audioCtx.current = null;
+      processor.current = null;
+      analyser.current = null;
+      dataArray.current = null;
     }
     recorded.current = [];
     fillerAudio.current = null;
