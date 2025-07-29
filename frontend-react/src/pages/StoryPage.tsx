@@ -73,7 +73,13 @@ export default function StoryPage() {
         {rec.lastFeedback && (
           <FeedbackToast
             text={rec.lastFeedback.feedback_text.replace(/\*\*(.*?)\*\*/g, '<strong class="highlight">$1</strong>')}
-            positive={rec.lastFeedback.correct !== false}
+            positive={
+              rec.lastFeedback.correct !== undefined
+                ? rec.lastFeedback.correct
+                : !/opnieuw|niet gehoord|again|wrong/i.test(
+                    rec.lastFeedback.feedback_text,
+                  )
+            }
             onReplay={rec.replayFeedback}
           />
         )}
