@@ -10,6 +10,7 @@ interface FeedbackData {
 
 export function useRecorder(studentId: string | null, teacherId: number | null) {
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(false);
   const [waveLevel, setWaveLevel] = useState(0);
   const [lastFeedback, setLastFeedback] = useState<FeedbackData | null>(null);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
   const pendingChunks = useRef<Blob[]>([]);
 
   const visualize = useCallback(() => {
-    if (!isRecording) return;
+    if (!isRecordingRef.current) return;
     if (analyser.current && dataArray.current) {
       analyser.current.getByteTimeDomainData(dataArray.current);
       let sum = 0;
@@ -40,7 +41,7 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
       setWaveLevel(rms);
     }
     raf.current = requestAnimationFrame(visualize);
-  }, [isRecording]);
+  }, []);
 
   const start = useCallback(async (sentence: string) => {
     if (!sentence || isRecording) return;
@@ -56,7 +57,7 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
     processor.current.connect(audioCtx.current.destination);
     recorded.current = [];
     processor.current.onaudioprocess = (e) => {
-      if (!isRecording) return;
+      if (!isRecordingRef.current) return;
       const buf = e.inputBuffer.getChannelData(0);
       const pcm = new Int16Array(buf.length);
       for (let i = 0; i < buf.length; i++) {
@@ -97,12 +98,14 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
       .catch((err) => {
         setLastFeedback({ feedback_text: 'Fout: ' + err.message, feedback_audio: '' });
         setIsRecording(false);
+        isRecordingRef.current = false;
       })
       .finally(() => {
         startPromise.current = null;
       });
 
     setIsRecording(true);
+    isRecordingRef.current = true;
     setWaveLevel(0);
     if (playbackUrl) URL.revokeObjectURL(playbackUrl);
     setPlaybackUrl(null);
@@ -113,6 +116,7 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
   const stop = useCallback(async () => {
     if (!isRecording) return;
     setIsRecording(false);
+    isRecordingRef.current = false;
     processor.current?.disconnect();
     stream.current?.getTracks().forEach((t) => t.stop());
     cancelAnimationFrame(raf.current ?? 0);
