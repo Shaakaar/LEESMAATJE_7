@@ -16,7 +16,7 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
 
   const audioCtx = useRef<AudioContext | null>(null);
-  const processor = useRef<ScriptProcessorNode | null>(null);
+  const processor = useRef<AudioWorkletNode | null>(null);
   const analyser = useRef<AnalyserNode | null>(null);
   const dataArray = useRef<Uint8Array | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -27,6 +27,7 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
   const delaySeconds = useRef<number>(0);
   const recorded = useRef<Int16Array[]>([]);
   const pendingChunks = useRef<Blob[]>([]);
+  const workletLoaded = useRef(false);
 
   const visualize = useCallback(() => {
     if (!isRecordingRef.current) return;
@@ -51,14 +52,20 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
     analyser.current = audioCtx.current.createAnalyser();
     analyser.current.fftSize = 512;
     dataArray.current = new Uint8Array(analyser.current.fftSize);
-    processor.current = audioCtx.current.createScriptProcessor(4096, 1, 1);
+    if (!workletLoaded.current) {
+      await audioCtx.current.audioWorklet.addModule(
+        import.meta.env.BASE_URL + 'recorder-worklet.js',
+      );
+      workletLoaded.current = true;
+    }
+    processor.current = new AudioWorkletNode(audioCtx.current, 'recorder-processor');
     source.connect(analyser.current);
     analyser.current.connect(processor.current);
     processor.current.connect(audioCtx.current.destination);
     recorded.current = [];
-    processor.current.onaudioprocess = (e) => {
+    processor.current.port.onmessage = (e) => {
       if (!isRecordingRef.current) return;
-      const buf = e.inputBuffer.getChannelData(0);
+      const buf: Float32Array = e.data;
       const pcm = new Int16Array(buf.length);
       for (let i = 0; i < buf.length; i++) {
         const s = Math.max(-1, Math.min(1, buf[i]));
