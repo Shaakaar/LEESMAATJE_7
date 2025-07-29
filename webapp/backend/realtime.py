@@ -101,6 +101,11 @@ class RealtimeSession:
         # Allow final chunks to arrive before signaling end-of-stream
         time.sleep(0.5)
         self.audio_q.put(None)
+        # Close the WAV file before offline engines read it. This ensures the
+        # header and data chunk are fully written and recognized by downstream
+        # libraries such as ``soundfile``.
+        self.wavefile.close()
+        
         if self.phon_thread.realtime:
             self.phon_thread.stop()
             self.phon_thread.join()
@@ -122,8 +127,6 @@ class RealtimeSession:
             self.azure_plain.stop()
         else:
             self.azure_plain.process_file(self.wav_path)
-
-        self.wavefile.close()
         flush_audio_queue(self.audio_q)
 
         self.results["end_time"] = time.time()
