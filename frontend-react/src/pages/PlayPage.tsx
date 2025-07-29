@@ -143,7 +143,7 @@ export default function PlayPage() {
                 minHeight: '150px',
               }}>
               <div
-                className="absolute inset-0 rounded-full border-4 border-primary/50"
+                className="absolute inset-0 rounded-full border-4 border-primary/50 pointer-events-none"
                 style={{ transform: `scale(${1 + micLevel})` }}
               />
               <button
