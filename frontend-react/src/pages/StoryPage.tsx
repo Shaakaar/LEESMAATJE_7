@@ -39,7 +39,10 @@ export default function StoryPage() {
   return (
     <AppShell>
       <div className="w-full max-w-xl bg-gradient-to-b from-primary/5 to-primary/0 p-6 rounded-2xl">
-        <SentenceCard item={item?.type === 'sentence' ? item : null} />
+        <SentenceCard
+          item={item?.type === 'sentence' ? item : null}
+          errors={rec.lastFeedback?.errors as any}
+        />
         {directionOpts && (
           <DirectionsChooser
             options={directionOpts}
