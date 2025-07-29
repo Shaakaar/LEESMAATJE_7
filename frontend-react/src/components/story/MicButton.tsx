@@ -32,7 +32,7 @@ export default function MicButton({ onClick, recording, waveLevel }: Props) {
         width={150}
         height={150}
         aria-hidden="true"
-        className={recording ? 'absolute inset-0' : 'hidden'}
+        className={recording ? 'absolute inset-0 pointer-events-none' : 'hidden'}
       />
       <button
         onClick={onClick}
