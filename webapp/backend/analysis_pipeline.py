@@ -41,6 +41,8 @@ def ensure_wav_16k(wav_bytes: bytes) -> str:
         f.write(wav_bytes)
 
     data, sr = sf.read(tmp_path)
+    if len(data) == 0:
+        return tmp_path
     if sr != 16000:
         data = resampy.resample(data, sr, 16000)
         sr = 16000
