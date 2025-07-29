@@ -9,6 +9,7 @@ interface Props {
 export default function SentenceCard({ item }: Props) {
   if (!item || item.type !== 'sentence') return <p className="min-h-[4rem]" />;
   function playSentence() {
+    if (!item) return;
     new Audio('/api/audio/' + item.audio).play();
   }
   return (

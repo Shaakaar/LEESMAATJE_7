@@ -19,7 +19,7 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
   const analyser = useRef<AnalyserNode | null>(null);
   const dataArray = useRef<Uint8Array | null>(null);
   const stream = useRef<MediaStream | null>(null);
-  const raf = useRef<number>();
+  const raf = useRef<number | null>(null);
   const sessionId = useRef<string | null>(null);
   const startPromise = useRef<Promise<void> | null>(null);
   const fillerAudio = useRef<string | null>(null);
