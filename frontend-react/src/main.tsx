@@ -19,7 +19,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route element={<RequireAuth />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/dashboard/level/:levelId" element={<LevelPage />} />
-            <Route path="/play/:levelId/:themeId/:idx?" element={<PlayPage />} />
+            <Route path="/play/:levelId/:themeId" element={<PlayPage />} />
             <Route path="/progress" element={<ProgressPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
