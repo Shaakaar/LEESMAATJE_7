@@ -11,4 +11,11 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  // During development the backend runs on a different port. Proxy API
+  // requests so the frontend can simply call `/api/...`.
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8000',
+    },
+  },
 });
