@@ -1,16 +1,15 @@
 interface Props {
   children: string;
   audio?: string;
-  wrong?: boolean;
 }
 
-export default function Word({ children, audio, wrong }: Props) {
+export default function Word({ children, audio }: Props) {
   function play() {
     if (audio) new Audio('/api/audio/' + audio).play();
   }
   return (
     <span
-      className={`word hover:text-primary ${wrong ? 'wrong' : ''}`}
+      className="cursor-pointer hover:text-primary"
       onClick={play}
     >
       {children}{' '}
