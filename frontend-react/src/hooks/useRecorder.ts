@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { encodeWav } from '@/lib/wav';
+import { toast } from '@/components/ui/toast';
 
 interface FeedbackData {
   feedback_text: string;
@@ -99,7 +100,9 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
         pendingChunks.current = [];
       })
       .catch((err) => {
-        setLastFeedback({ feedback_text: 'Fout: ' + err.message, feedback_audio: '' });
+        const msg = 'Fout: ' + err.message;
+        setLastFeedback({ feedback_text: msg, feedback_audio: '' });
+        toast({ title: 'Fout', description: err.message, variant: 'destructive' });
         setIsRecording(false);
         isRecordingRef.current = false;
       })
@@ -162,7 +165,9 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
     try {
       data = await stopPromise;
     } catch (err) {
-      setLastFeedback({ feedback_text: 'Fout: ' + (err as Error).message, feedback_audio: '' });
+      const msg = 'Fout: ' + (err as Error).message;
+      setLastFeedback({ feedback_text: msg, feedback_audio: '' });
+      toast({ title: 'Fout', description: (err as Error).message, variant: 'destructive' });
       return;
     }
 
@@ -183,6 +188,11 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
     recorded.current = [];
     fillerAudio.current = null;
     setLastFeedback(data);
+    toast({
+      title: 'Feedback',
+      description: data.feedback_text,
+      variant: data.correct === false ? 'destructive' : 'default',
+    });
     if (data.feedback_audio) {
       new Audio('/api/audio/' + data.feedback_audio).play();
     }
