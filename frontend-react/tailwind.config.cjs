@@ -1,10 +1,14 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        primary: '#3BA3F8',
+        primary: '#4F8CFF',
+        accent: '#55C2A7',
+        background: '#F3FAFF',
+        text: '#022B3A',
         success: '#A3E635',
         error: '#FB7185',
       },
