@@ -6,7 +6,7 @@ import LoginPage from './pages/LoginPage';
 import { ModelInitProvider } from './lib/ModelInitContext';
 import DashboardPage from './pages/DashboardPage';
 import LevelPage from './pages/LevelPage';
-import PlayPage from './pages/PlayPage';
+import StoryPage from './pages/StoryPage';
 import ProgressPage from './pages/ProgressPage';
 import RequireAuth from './components/RequireAuth';
 
@@ -19,7 +19,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route element={<RequireAuth />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/dashboard/level/:levelId" element={<LevelPage />} />
-            <Route path="/play/:levelId/:themeId" element={<PlayPage />} />
+            <Route path="/play/:levelId/:themeId" element={<StoryPage />} />
             <Route path="/progress" element={<ProgressPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -9,7 +9,7 @@
   }
 
   body {
-    @apply font-sans font-normal;
+    @apply font-sans font-normal bg-background text-text dark:bg-slate-900 dark:text-slate-100;
     font-family: var(--font-body);
   }
 }
