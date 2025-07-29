@@ -120,7 +120,14 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
     if (!isRecording) return;
     setIsRecording(false);
     isRecordingRef.current = false;
-    processor.current?.disconnect();
+    const ctx = audioCtx.current;
+    const procNode = processor.current;
+    audioCtx.current = null;
+    processor.current = null;
+    analyser.current = null;
+    dataArray.current = null;
+
+    procNode?.disconnect();
     stream.current?.getTracks().forEach((t) => t.stop());
     cancelAnimationFrame(raf.current ?? 0);
     setWaveLevel(0);
@@ -166,16 +173,12 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
       flat.set(c, pos);
       pos += c.length;
     }
-    if (audioCtx.current) {
-      const sr = audioCtx.current.sampleRate;
+    if (ctx) {
+      const sr = ctx.sampleRate;
       const wav = encodeWav(flat, sr);
       const url = URL.createObjectURL(wav);
       setPlaybackUrl(url);
-      audioCtx.current.close();
-      audioCtx.current = null;
-      processor.current = null;
-      analyser.current = null;
-      dataArray.current = null;
+      ctx.close();
     }
     recorded.current = [];
     fillerAudio.current = null;
