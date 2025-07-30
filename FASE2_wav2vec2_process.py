@@ -186,6 +186,14 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         import soundfile as sf
 
         data, sr = sf.read(wav_path)
+        # Skip processing if the file is empty
+        if data.size == 0:
+            if self.results is not None:
+                self.results["wav2vec2_phonemes"].append({
+                    "timestamp": "0",
+                    "phonemes": []
+                })
+            return
         if sr != 16000:
             data = resampy.resample(data, sr, 16000)
         if data.ndim > 1:
@@ -342,6 +350,13 @@ class Wav2Vec2Transcriber(threading.Thread):
         import soundfile as sf
 
         data, sr = sf.read(wav_path)
+        if data.size == 0:
+            if self.results is not None:
+                self.results["wav2vec2_asr"].append({
+                    "timestamp": "0",
+                    "transcript": ""
+                })
+            return
         if sr != 16000:
             data = resampy.resample(data, sr, 16000)
         if data.ndim > 1:
