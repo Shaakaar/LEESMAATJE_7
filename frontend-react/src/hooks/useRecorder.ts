@@ -118,7 +118,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     dataArrayRef.current = dataArray;
 
     await audioCtx.audioWorklet.addModule(
-      new URL('../worklets/pcm-processor.ts', import.meta.url),
+      `${import.meta.env.BASE_URL}pcm-worklet.js`,
     );
     const processor = new AudioWorkletNode(audioCtx, 'pcm-processor');
     processorRef.current = processor;
