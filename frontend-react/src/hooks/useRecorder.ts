@@ -2,11 +2,16 @@ import { useCallback, useRef, useState } from 'react';
 import { encodeWav } from '@/lib/wav';
 import { toast } from '@/components/ui/toast';
 
+export interface FeedbackError {
+  expected_word?: string;
+  word?: string;
+}
+
 interface FeedbackData {
   feedback_text: string;
   feedback_audio: string;
   correct?: boolean;
-  errors?: unknown[];
+  errors?: FeedbackError[];
 }
 
 export function useRecorder(studentId: string | null, teacherId: number | null) {
