@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { useAuthStore } from '@/lib/useAuthStore';
 import { useNavigate } from 'react-router-dom';
-import { useRecorder, FeedbackData } from '@/hooks/useRecorder';
-import { SentenceDisplay, StoryItem } from '@/components/story/SentenceDisplay';
+import { useRecorder } from '@/hooks/useRecorder';
+import type { FeedbackData } from '@/hooks/useRecorder';
+import { SentenceDisplay } from '@/components/story/SentenceDisplay';
+import type { StoryItem } from '@/components/story/SentenceDisplay';
 import { FeedbackBox } from '@/components/story/FeedbackBox';
 import { RecordControls } from '@/components/story/RecordControls';
 
@@ -15,7 +17,7 @@ export default function StoryPage() {
   const [selectedDir, setSelectedDir] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null!);
   const currentItem = storyData[index] ?? null;
 
   const { recording, status, playbackUrl, startRecording, stopRecording } = useRecorder({
