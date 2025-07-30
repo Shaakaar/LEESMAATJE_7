@@ -126,7 +126,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
       const buf = e.inputBuffer.getChannelData(0);
       const pcm = new Int16Array(buf.length);
       for (let i = 0; i < buf.length; i++) {
-        let s = Math.max(-1, Math.min(1, buf[i]));
+        const s = Math.max(-1, Math.min(1, buf[i]));
         pcm[i] = s * 32767;
       }
       recordedChunksRef.current.push(pcm);
