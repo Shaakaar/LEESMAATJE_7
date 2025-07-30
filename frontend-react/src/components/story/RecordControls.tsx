@@ -12,7 +12,12 @@ export function RecordControls({ onRecord, onStop, recording, playbackUrl, onPla
   return (
     <div className="flex flex-col items-center mt-4">
       <div className="relative w-40 h-40 flex items-center justify-center">
-        <canvas ref={canvasRef} width={150} height={150} className={`${recording ? 'opacity-100' : 'opacity-0'} transition-opacity absolute`} />
+        <canvas
+          ref={canvasRef}
+          width={150}
+          height={150}
+          className={`${recording ? 'opacity-100' : 'opacity-0'} transition-opacity absolute pointer-events-none`}
+        />
         <button
           onClick={recording ? onStop : onRecord}
           className={`w-28 h-28 rounded-full flex flex-col items-center justify-center bg-primary text-white ${recording ? 'shadow-inner' : ''}`}

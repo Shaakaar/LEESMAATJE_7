@@ -48,7 +48,10 @@ export default function StoryPage() {
   function next() {
     if (currentItem && currentItem.type === 'direction') {
       if (selectedDir === null) return;
-      const choice = selectedDir === 0 ? currentItem.text : (storyData[index + 1] as any).text;
+      const choice =
+        selectedDir === 0
+          ? currentItem.text
+          : (storyData[index + 1] as StoryItem).text;
       const theme = localStorage.getItem('theme');
       const level = localStorage.getItem('level');
       const url = `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(choice)}`;
