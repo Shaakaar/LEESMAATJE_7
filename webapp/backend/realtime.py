@@ -101,6 +101,9 @@ class RealtimeSession:
         # Allow final chunks to arrive before signaling end-of-stream
         time.sleep(0.5)
         self.audio_q.put(None)
+        extra_sentinels = int(self.phon_thread.realtime) + int(self.asr_thread.realtime) - 1
+        for _ in range(max(extra_sentinels, 0)):
+            self.audio_q.put(None)
 
         # Stop any realtime threads first so they finish consuming the queue
         if self.phon_thread.realtime:
