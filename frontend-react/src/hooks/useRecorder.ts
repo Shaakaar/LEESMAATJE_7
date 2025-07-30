@@ -117,7 +117,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     analyserRef.current = analyser;
     dataArrayRef.current = dataArray;
     await audioCtx.audioWorklet.addModule(
-      new URL('../lib/recorder-processor.ts', import.meta.url),
+      '/static/react/recorder-worklet.js',
     );
     const processor = new AudioWorkletNode(audioCtx, 'recorder-processor');
     processorRef.current = processor;
