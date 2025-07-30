@@ -1,3 +1,5 @@
+/// <reference lib="webworker" />
+
 class RecorderProcessor extends AudioWorkletProcessor {
   process(inputs: Float32Array[][]) {
     const input = inputs[0];
