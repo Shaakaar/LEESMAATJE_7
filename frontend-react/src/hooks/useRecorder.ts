@@ -21,7 +21,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const processorRef = useRef<AudioWorkletNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sessionIdRef = useRef<string | null>(null);
@@ -116,19 +116,17 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     const dataArray = new Uint8Array(analyser.fftSize);
     analyserRef.current = analyser;
     dataArrayRef.current = dataArray;
-    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    await audioCtx.audioWorklet.addModule(
+      new URL('../lib/recorder-processor.ts', import.meta.url),
+    );
+    const processor = new AudioWorkletNode(audioCtx, 'recorder-processor');
     processorRef.current = processor;
     source.connect(analyser);
     analyser.connect(processor);
     processor.connect(audioCtx.destination);
-    processor.onaudioprocess = (e) => {
+    processor.port.onmessage = (e) => {
       if (!recording) return;
-      const buf = e.inputBuffer.getChannelData(0);
-      const pcm = new Int16Array(buf.length);
-      for (let i = 0; i < buf.length; i++) {
-        const s = Math.max(-1, Math.min(1, buf[i]));
-        pcm[i] = s * 32767;
-      }
+      const pcm = e.data as Int16Array;
       recordedChunksRef.current.push(pcm);
       const blob = new Blob([pcm], { type: 'application/octet-stream' });
       if (sessionIdRef.current) {
