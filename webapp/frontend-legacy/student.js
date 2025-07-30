@@ -129,14 +129,18 @@ async function startRecording(){
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 512;
   dataArray = new Uint8Array(analyser.fftSize);
-  await audioCtx.audioWorklet.addModule('/static/recorder-worklet.js');
-  processor = new AudioWorkletNode(audioCtx, 'recorder-processor');
+  processor = audioCtx.createScriptProcessor(4096,1,1);
   source.connect(analyser);
   analyser.connect(processor);
   processor.connect(audioCtx.destination);
-  processor.port.onmessage = e => {
+  processor.onaudioprocess = e => {
     if(!recording) return;
-    const pcm = e.data;
+    const buf = e.inputBuffer.getChannelData(0);
+    const pcm = new Int16Array(buf.length);
+    for(let i=0;i<buf.length;i++){
+      let s = Math.max(-1, Math.min(1, buf[i]));
+      pcm[i] = s*32767;
+    }
     recordedChunks.push(pcm);
     const blob = new Blob([pcm], {type:'application/octet-stream'});
     if(sessionId){
