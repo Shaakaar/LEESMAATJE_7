@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { ToastViewport } from '@/components/ui/toast';
 import { LogOut, Moon, Sun } from 'lucide-react';
 import { useAuthStore } from '@/lib/useAuthStore';
 
@@ -35,6 +36,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </header>
       <main className="flex-1 flex items-center justify-center p-4">{children}</main>
+      <ToastViewport />
     </div>
   );
 }
