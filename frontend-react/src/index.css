@@ -13,3 +13,12 @@
     font-family: var(--font-body);
   }
 }
+
+@layer utilities {
+  .highlight {
+    @apply font-bold bg-yellow-100 px-1 rounded;
+  }
+  .word.wrong {
+    @apply bg-red-200 px-1 rounded;
+  }
+}
