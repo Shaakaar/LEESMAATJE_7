@@ -159,6 +159,10 @@ class AzurePronunciationEvaluator:
 
     def process_file(self, wav_path: str):
         """Run pronunciation assessment on a saved WAV."""
+        if os.path.getsize(wav_path) == 0:
+            if self.results is not None:
+                self.results["azure_pronunciation"]["final_transcript"] = ""
+            return
         audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
         recognizer = speechsdk.SpeechRecognizer(
             speech_config=self.speech_config,
@@ -290,6 +294,10 @@ class AzurePlainTranscriber:
 
     def process_file(self, wav_path: str):
         """Transcribe a saved WAV using Azure."""
+        if os.path.getsize(wav_path) == 0:
+            if self.results is not None:
+                self.results["azure_plain"]["final_transcript"] = ""
+            return
         audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
         recognizer = speechsdk.SpeechRecognizer(
             speech_config=self.speech_config,
