@@ -199,6 +199,14 @@ class RecorderPipeline:
             t_stop_press = time.perf_counter()
             recorder.stop()
             time.sleep(0.1)   # let callbacks flush
+            # Ensure all Wav2Vec2 threads see the end-of-stream sentinel
+            extra_sentinels = (
+                int(extractor_phonemes.realtime)
+                + int(extractor_text.realtime)
+                - 1
+            )
+            for _ in range(max(extra_sentinels, 0)):
+                recorder.audio_q.put(None)
         else:
             # recorder stopped automatically
             t_stop_press = time.perf_counter()
