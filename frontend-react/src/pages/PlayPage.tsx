@@ -34,7 +34,7 @@ export default function PlayPage() {
         teacher_id: teacherId ?? '',
         name: name ?? '',
       });
-      window.location.href = `/static/story.html?${q.toString()}`;
+      navigate(`/story?${q.toString()}`);
     });
     return () => {
       ev.close();
