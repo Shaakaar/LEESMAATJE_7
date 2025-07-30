@@ -11,7 +11,9 @@ export default function FeedbackToast({ text, positive, onReplay }: Props) {
     <div
       role="status"
       aria-live="polite"
-      className={`mt-4 flex items-center justify-between p-4 rounded-xl shadow ${positive ? 'bg-green-100' : 'bg-red-100'}`}
+      className={`mt-4 flex items-center justify-between p-4 rounded-xl shadow ${
+        positive ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'
+      }`}
     >
       <p dangerouslySetInnerHTML={{ __html: text }} />
       <button

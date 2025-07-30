@@ -13,3 +13,9 @@
     font-family: var(--font-body);
   }
 }
+
+@layer components {
+  .highlight {
+    @apply font-bold bg-yellow-200 rounded px-1;
+  }
+}

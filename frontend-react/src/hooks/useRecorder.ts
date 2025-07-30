@@ -115,7 +115,7 @@ export function useRecorder(studentId: string | null, teacherId: number | null) 
     setWaveLevel(0);
     if (playbackUrl) URL.revokeObjectURL(playbackUrl);
     setPlaybackUrl(null);
-    setLastFeedback(null);
+    // Keep showing previous feedback while recording
     visualize();
   }, [isRecording, playbackUrl, studentId, teacherId, visualize]);
 
