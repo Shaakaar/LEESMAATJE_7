@@ -9,25 +9,7 @@
   }
 
   body {
-    @apply font-sans font-normal bg-background text-text dark:bg-slate-900 dark:text-slate-100;
+    @apply font-sans font-normal;
     font-family: var(--font-body);
-  }
-}
-
-@layer components {
-  .highlight {
-    @apply font-bold bg-yellow-200 rounded px-1;
-  }
-  .wrong {
-    @apply bg-red-200 text-red-900 rounded px-1;
-  }
-  @keyframes shake {
-    0% { transform: translateX(0); }
-    25% { transform: translateX(-0.25rem); }
-    75% { transform: translateX(0.25rem); }
-    100% { transform: translateX(0); }
-  }
-  .shake {
-    animation: shake 90ms ease-in-out;
   }
 }
