@@ -186,6 +186,9 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         import soundfile as sf
 
         data, sr = sf.read(wav_path)
+        if len(data) == 0:
+            console.print("[yellow]⚠ Skipping phoneme extraction: empty audio file.[/yellow]")
+            return
         if sr != 16000:
             data = resampy.resample(data, sr, 16000)
         if data.ndim > 1:
@@ -342,6 +345,9 @@ class Wav2Vec2Transcriber(threading.Thread):
         import soundfile as sf
 
         data, sr = sf.read(wav_path)
+        if len(data) == 0:
+            console.print("[yellow]⚠ Skipping ASR processing: empty audio file.[/yellow]")
+            return
         if sr != 16000:
             data = resampy.resample(data, sr, 16000)
         if data.ndim > 1:
