@@ -101,29 +101,35 @@ class RealtimeSession:
         # Allow final chunks to arrive before signaling end-of-stream
         time.sleep(0.5)
         self.audio_q.put(None)
+
+        # Stop any realtime threads first so they finish consuming the queue
         if self.phon_thread.realtime:
             self.phon_thread.stop()
             self.phon_thread.join()
-        else:
-            self.phon_thread.process_file(self.wav_path)
-
         if self.asr_thread.realtime:
             self.asr_thread.stop()
             self.asr_thread.join()
-        else:
-            self.asr_thread.process_file(self.wav_path)
-
         if self.azure_pron.realtime:
             self.azure_pron.stop()
-        else:
-            self.azure_pron.process_file(self.wav_path)
-
         if self.azure_plain.realtime:
             self.azure_plain.stop()
-        else:
-            self.azure_plain.process_file(self.wav_path)
 
-        self.wavefile.close()
+        # Close WAV file before any offline processing reads from it
+        if self.wavefile:
+            self.wavefile.close()
+            self.wavefile = None
+
+        if not self.phon_thread.realtime:
+            self.phon_thread.process_file(self.wav_path)
+
+        if not self.asr_thread.realtime:
+            self.asr_thread.process_file(self.wav_path)
+
+        if not self.azure_pron.realtime:
+            self.azure_pron.process_file(self.wav_path)
+
+        if not self.azure_plain.realtime:
+            self.azure_plain.process_file(self.wav_path)
         flush_audio_queue(self.audio_q)
 
         self.results["end_time"] = time.time()
