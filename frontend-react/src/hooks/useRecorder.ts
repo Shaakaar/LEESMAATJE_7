@@ -73,7 +73,14 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
 
   async function startRecording() {
     if (!sentence) return;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStatus('Fout: ' + message);
+      return;
+    }
     streamRef.current = stream;
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
