@@ -214,7 +214,10 @@ async def process(
 
     results = analyze_audio(wav_bytes, sentence)
     req, messages = prompt_builder.build(results, state={})
-    tutor_resp = await gpt_client.chat(messages)
+    try:
+        tutor_resp = await gpt_client.chat(messages)
+    except gpt_client.GPTClientError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     filler_text = f"De zin was {sentence}"
     filler_audio = tts_to_file(filler_text)
@@ -302,7 +305,10 @@ async def realtime_stop(sid: str):
         raise HTTPException(status_code=404, detail="Unknown session")
     results = sess.stop()
     req, messages = prompt_builder.build(results, state={})
-    tutor_resp = await gpt_client.chat(messages)
+    try:
+        tutor_resp = await gpt_client.chat(messages)
+    except gpt_client.GPTClientError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     from .tts import tts_to_file
 
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
