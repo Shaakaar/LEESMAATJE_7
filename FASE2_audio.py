@@ -141,6 +141,21 @@ class AudioRecorder:
             console.print(f"[green]▶ Recording started:[/green] [cyan]SR={self.sample_rate} Hz[/cyan], [cyan]block={self.block_duration_ms} ms[/cyan]\n")
         except Exception as e:
             console.print(f"[red]✖ Failed to start audio stream:[/red] {e}")
+            self._running.clear()
+            if self._stream:
+                try:
+                    self._stream.close()
+                except Exception:
+                    pass
+                self._stream = None
+            if self.wavefile:
+                self.wavefile.close()
+                self.wavefile = None
+                # remove partially created file
+                try:
+                    Path(self.filename).unlink(missing_ok=True)
+                except Exception:
+                    pass
             return
 
         if max_duration_s is not None:
