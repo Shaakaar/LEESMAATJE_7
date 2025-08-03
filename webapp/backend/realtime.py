@@ -108,13 +108,17 @@ class RealtimeSession:
         self.asr_q.put(None)
         self.wavefile.close()
         if self.phon_thread.realtime:
-            self.phon_thread.stop()
+            # Allow the thread to drain remaining audio from the queue.
+            # A sentinel has already been enqueued, so simply join instead
+            # of calling ``stop()``; forcing ``stop()`` here can interrupt
+            # processing and yield empty results.
             self.phon_thread.join()
         else:
             self.phon_thread.process_file(self.wav_path)
 
         if self.asr_thread.realtime:
-            self.asr_thread.stop()
+            # Same reasoning as above – joining lets the transcriber finish
+            # processing any buffered audio before exiting.
             self.asr_thread.join()
         else:
             self.asr_thread.process_file(self.wav_path)
