@@ -16,13 +16,14 @@ import time, uuid, json, os
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Callable, Tuple
 import threading
+import queue
 
 import sounddevice as sd
 from rich.console import Console
 from rich.panel import Panel
 
 # Existing engine modules
-from FASE2_audio import AudioRecorder, audio_q, flush_audio_queue          # sentinel already handled
+from FASE2_audio import AudioRecorder, flush_audio_queue          # sentinel already handled
 from FASE2_wav2vec2_process import (
     Wav2Vec2PhonemeExtractor,
     Wav2Vec2Transcriber,
@@ -108,7 +109,11 @@ class RecorderPipeline:
         """
         session_id = str(uuid.uuid4())
         start_time_iso = datetime.now(timezone.utc).isoformat()
-        flush_audio_queue()
+
+        # Dedicated audio queues so each engine receives the full stream
+        phon_q = queue.Queue()
+        asr_q = queue.Queue()
+        flush_audio_queue([phon_q, asr_q])
         # ---------- shared results dict ----------------------------------
         results: Dict[str, Any] = {
             "session_id": session_id,
@@ -151,12 +156,14 @@ class RecorderPipeline:
             chunk_duration=self.chunk_duration,
             results=results,
             realtime=self.rt_flags["w2v2_phonemes"],
+            audio_queue=phon_q,
         )
         extractor_text = Wav2Vec2Transcriber(
             sample_rate=self.sample_rate,
             chunk_duration=self.chunk_duration,
             results=results,
             realtime=self.rt_flags["w2v2_asr"],
+            audio_queue=asr_q,
         )
 
         recorder = AudioRecorder(
@@ -164,6 +171,7 @@ class RecorderPipeline:
             channels=1,
             block_duration_ms=20,
             use_vad=False,          # you can expose this as parameter later
+            audio_queue=[phon_q, asr_q],
         )
 
         # ---------- start threads ----------------------------------------

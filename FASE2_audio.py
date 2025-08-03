@@ -16,13 +16,24 @@ from rich.text import Text
 #─── Global console ─────────────────────────────────────────────────────────────
 console = Console()
 
-# Shared queue for raw PCM frames (used as default)
+# Shared queue for raw PCM frames (kept for backward compatibility)
 audio_q = queue.Queue()
 
-def flush_audio_queue(q: queue.Queue = None):
-    """Remove all pending items from the provided queue."""
+def flush_audio_queue(q: queue.Queue | list[queue.Queue] = None):
+    """Remove all pending items from one or many queues.
+
+    Args:
+        q: A single ``queue.Queue`` or a list of queues.  If ``None`` the
+           global ``audio_q`` is flushed.
+    """
     if q is None:
         q = audio_q
+
+    if isinstance(q, list):
+        for sub_q in q:
+            flush_audio_queue(sub_q)
+        return
+
     while not q.empty():
         try:
             q.get_nowait()
@@ -45,7 +56,7 @@ class AudioRecorder:
         vad_aggressiveness: int = 2,
         silence_timeout_s: float = 1.0,
         *,
-        audio_queue: queue.Queue = audio_q,
+        audio_queue: queue.Queue | list[queue.Queue] = audio_q,
     ):
         """
         Args:
@@ -62,7 +73,12 @@ class AudioRecorder:
         self.block_size = int(sample_rate * block_duration_ms / 1000)
         self.use_vad = use_vad
         self.silence_timeout_s = silence_timeout_s
-        self.audio_q = audio_queue
+
+        # Support one or multiple subscriber queues.
+        if isinstance(audio_queue, list):
+            self.audio_qs = audio_queue
+        else:
+            self.audio_qs = [audio_queue]
 
         if use_vad:
             self.vad = webrtcvad.Vad(vad_aggressiveness)
@@ -95,8 +111,9 @@ class AudioRecorder:
         # float32 in [-1,+1] → int16 PCM
         pcm = (indata[:, 0] * 32767).astype(np.int16)
 
-        # Enqueue for downstream consumers
-        self.audio_q.put(pcm)
+        # Enqueue for downstream consumers (fan out to all queues)
+        for q in self.audio_qs:
+            q.put(pcm)
 
         # Write to WAV file
         if self.wavefile:
@@ -185,7 +202,8 @@ class AudioRecorder:
             self.wavefile = None
 
         time.sleep(0.05)      # optional but robust
-        self.audio_q.put(None)     # <-- NEW sentinel
+        for q in self.audio_qs:
+            q.put(None)     # <-- NEW sentinel for each queue
 
         console.print("[red]■ Recording stopped.[/red]\n")
 
