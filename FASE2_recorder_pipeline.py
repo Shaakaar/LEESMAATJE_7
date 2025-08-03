@@ -219,7 +219,12 @@ class RecorderPipeline:
         offline_threads = []
 
         if extractor_phonemes.realtime:
-            extractor_phonemes.stop()
+            # Do not call stop(); the AudioRecorder places a sentinel `None`
+            # in the queue, which naturally lets the thread finish
+            # processing any remaining audio before exiting. Calling
+            # `stop()` here can interrupt that draining and result in
+            # empty outputs.  We simply join the thread to wait for
+            # completion.
             extractor_phonemes.join()
             engine_times["w2v2_phonemes"]["end"] = time.perf_counter()
         else:
@@ -239,7 +244,9 @@ class RecorderPipeline:
                 engine_times["w2v2_phonemes"]["end"] = time.perf_counter()
 
         if extractor_text.realtime:
-            extractor_text.stop()
+            # Same reasoning as above: allow the transcriber thread to
+            # consume the final queue sentinel and flush its buffer
+            # before finishing.
             extractor_text.join()
             engine_times["w2v2_asr"]["end"] = time.perf_counter()
         else:
