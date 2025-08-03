@@ -54,7 +54,8 @@ REALTIME_FLAGS = {
 PARALLEL_OFFLINE = True
 CHUNK_DURATION = 10
 
-# Stream audio from the recorder to Azure instead of using a separate microphone
+# Stream audio to Azure instead of using a separate microphone.
+# Applies to both RecorderPipeline and RealtimeSession.
 AZURE_PUSH_STREAM = True
 
 # GPT model settings

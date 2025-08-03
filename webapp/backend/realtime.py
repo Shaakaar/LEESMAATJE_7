@@ -23,9 +23,12 @@ class RealtimeSession:
     """Manage realtime audio analysis for one sentence."""
 
     def __init__(self, sentence: str, sample_rate: int = 16000, *, filler_audio: str | None = None, teacher_id: int = 0, student_id: int = 0):
-        # Separate queues for phoneme and ASR engines so each receives full audio
+        # Separate queues for phoneme, ASR and (optionally) Azure engines so
+        # each receives the full stream.
         self.phon_q = queue.Queue()
         self.asr_q = queue.Queue()
+        self.azure_pron_q = None
+        self.azure_plain_q = None
         self.id = str(uuid.uuid4())
         self.sentence = sentence
         self.sample_rate = sample_rate
@@ -56,6 +59,13 @@ class RealtimeSession:
 
         rt = config.REALTIME_FLAGS
 
+        # Queues for Azure engines when using push-stream instead of the
+        # default microphone.
+        if config.AZURE_PUSH_STREAM and rt.get("azure_pron", True):
+            self.azure_pron_q = queue.Queue()
+        if config.AZURE_PUSH_STREAM and rt.get("azure_plain", True):
+            self.azure_plain_q = queue.Queue()
+
         # Start wav2vec2 engines
         self.phon_thread = Wav2Vec2PhonemeExtractor(
             sample_rate=self.sample_rate,
@@ -77,10 +87,14 @@ class RealtimeSession:
             self.sentence,
             results=self.results,
             realtime=rt.get("azure_pron", True),
+            audio_queue=self.azure_pron_q,
+            sample_rate=self.sample_rate,
         )
         self.azure_plain = AzurePlainTranscriber(
             results=self.results,
             realtime=rt.get("azure_plain", True),
+            audio_queue=self.azure_plain_q,
+            sample_rate=self.sample_rate,
         )
 
         if self.phon_thread.realtime:
@@ -95,9 +109,13 @@ class RealtimeSession:
     def add_chunk(self, pcm_data: bytes):
         """Add a chunk of 16‑bit mono PCM data."""
         arr = np.frombuffer(pcm_data, dtype=np.int16)
-        # Fan out chunk to both queues
+        # Fan out chunk to all engine queues
         self.phon_q.put(arr)
         self.asr_q.put(arr)
+        if self.azure_pron_q is not None:
+            self.azure_pron_q.put(arr)
+        if self.azure_plain_q is not None:
+            self.azure_plain_q.put(arr)
         self.wavefile.writeframes(pcm_data)
 
     def stop(self) -> Dict[str, Any]:
@@ -106,6 +124,10 @@ class RealtimeSession:
         time.sleep(0.5)
         self.phon_q.put(None)
         self.asr_q.put(None)
+        if self.azure_pron_q is not None:
+            self.azure_pron_q.put(None)
+        if self.azure_plain_q is not None:
+            self.azure_plain_q.put(None)
         self.wavefile.close()
         if self.phon_thread.realtime:
             # Allow the thread to drain remaining audio from the queue.
@@ -133,7 +155,8 @@ class RealtimeSession:
         else:
             self.azure_plain.process_file(self.wav_path)
 
-        flush_audio_queue([self.phon_q, self.asr_q])
+        queues = [q for q in (self.phon_q, self.asr_q, self.azure_pron_q, self.azure_plain_q) if q is not None]
+        flush_audio_queue(queues)
 
         self.results["end_time"] = time.time()
         req, messages = prompt_builder.build(self.results, state={})
