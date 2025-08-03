@@ -62,6 +62,8 @@ REALTIME_FLAGS = {
 # Run offline engines in parallel?
 PARALLEL_OFFLINE = True
 CHUNK_DURATION = 10
+# Stream audio from the recorder to Azure instead of using a second microphone
+AZURE_PUSH_STREAM = True
 
 def save_json(payload: dict):
     """Serialize results to file for later analysis."""
@@ -74,7 +76,8 @@ def save_json(payload: dict):
 # ────────────────── MAIN LOOP ───────────────
 def main():
     pipeline = RecorderPipeline(rt_flags=REALTIME_FLAGS,
-                                chunk_duration=CHUNK_DURATION)
+                                chunk_duration=CHUNK_DURATION,
+                                use_push_to_azure=AZURE_PUSH_STREAM)
 
     for sentence in SENTENCES:
         need_prompt = True

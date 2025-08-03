@@ -2,11 +2,16 @@
 # FASE2_azure_process.py
 # ---------------------------------------------------------------------------
 # Azure PronunciationEvaluator  +  Azure PlainTranscriber
-# – Uses default microphone (no shared stream)
+# – Realtime mode can use the default microphone *or* a push audio stream fed
+#   from the shared ``AudioRecorder``.  When a queue is supplied the class will
+#   consume PCM frames from that queue and forward them to Azure via a
+#   ``PushAudioInputStream``.  This allows all engines (Wav2Vec2 + Azure) to use
+#   the same microphone source.
 # – Event-based wait on stop() to capture final results
 # ---------------------------------------------------------------------------
 import os
 import json
+import queue
 import threading
 from datetime import datetime, timezone
 
@@ -22,7 +27,35 @@ console = Console()
 # Pronunciation Evaluator
 # ─────────────────────────────────────────────────────────────────────────────
 class AzurePronunciationEvaluator:
-    def __init__(self, reference_text: str, results: dict | None = None, realtime: bool = True):
+    def __init__(
+        self,
+        reference_text: str,
+        results: dict | None = None,
+        realtime: bool = True,
+        *,
+        audio_queue: queue.Queue | None = None,
+        sample_rate: int = 16000,
+    ):
+        """Pronunciation assessment via Azure.
+
+        Parameters
+        ----------
+        reference_text:
+            The sentence the learner should read.
+        results:
+            Shared results dictionary; populated in-place.
+        realtime:
+            If ``True`` run in streaming mode, otherwise expect to be called on
+            a saved WAV file via :func:`process_file`.
+        audio_queue:
+            Optional queue of PCM ``int16`` numpy arrays.  When provided the
+            queue is consumed and forwarded to Azure via a
+            ``PushAudioInputStream`` so that all engines share the same
+            microphone recording.
+        sample_rate:
+            Sample rate of the audio in ``audio_queue``.
+        """
+
         load_dotenv()
         key    = os.getenv("AZURE_SPEECH_KEY")
         region = os.getenv("AZURE_SPEECH_REGION")
@@ -31,12 +64,25 @@ class AzurePronunciationEvaluator:
 
         self.reference_text = reference_text
         self.realtime = realtime
+        self.audio_queue = audio_queue
+        self.sample_rate = sample_rate
+        self._feed_thread = None
+        self._push_stream = None
 
         speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
         speech_config.speech_recognition_language = "nl-NL"
         speech_config.output_format = speechsdk.OutputFormat.Detailed
 
-        audio_config = speechsdk.audio.AudioConfig(use_default_microphone=True)
+        if self.realtime and self.audio_queue is not None:
+            fmt = speechsdk.audio.AudioStreamFormat(
+                samples_per_second=self.sample_rate,
+                bits_per_sample=16,
+                channels=1,
+            )
+            self._push_stream = speechsdk.audio.PushAudioInputStream(stream_format=fmt)
+            audio_config = speechsdk.audio.AudioConfig(stream=self._push_stream)
+        else:
+            audio_config = speechsdk.audio.AudioConfig(use_default_microphone=True)
 
         # Build pronunciation-assessment config
         pa_json = json.dumps({
@@ -54,7 +100,7 @@ class AzurePronunciationEvaluator:
         if self.realtime:
             self.recognizer = speechsdk.SpeechRecognizer(
                 speech_config=self.speech_config,
-                audio_config=audio_config
+                audio_config=audio_config,
             )
             self.pa_cfg.apply_to(self.recognizer)
 
@@ -64,6 +110,8 @@ class AzurePronunciationEvaluator:
             # ── Event handlers
             self.recognizer.recognizing.connect(self._on_interim)
             self.recognizer.recognized.connect(self._on_final)
+            if self.audio_queue is not None:
+                self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
 
         # ── Event-based “done” flag
         self._done_event = threading.Event()
@@ -81,6 +129,24 @@ class AzurePronunciationEvaluator:
                 "word_timings": [],
                 "pronunciation_scores": {}
             }
+
+    # ------------------------------------------------------------------ internal
+    def _feed_audio(self):
+        """Forward PCM frames from ``audio_queue`` into Azure."""
+        if self._push_stream is None or self.audio_queue is None:
+            return
+        while True:
+            pcm = self.audio_queue.get()
+            if pcm is None:
+                break
+            try:
+                self._push_stream.write(pcm.tobytes())
+            except Exception:
+                break
+        try:
+            self._push_stream.close()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
@@ -146,6 +212,8 @@ class AzurePronunciationEvaluator:
                 border_style="green"
             )
         )
+        if self._feed_thread is not None:
+            self._feed_thread.start()
         self.recognizer.start_continuous_recognition()
 
     def stop(self, timeout: float = 1.0):
@@ -154,6 +222,8 @@ class AzurePronunciationEvaluator:
         self._running = False
         console.print("[red]■ Stopping Azure Pron…[/red]")
         self.recognizer.stop_continuous_recognition()
+        if self._feed_thread is not None:
+            self._feed_thread.join()
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Pron stopped.[/red]\n")
 
@@ -218,7 +288,15 @@ class AzurePronunciationEvaluator:
 # Plain Transcriber
 # ─────────────────────────────────────────────────────────────────────────────
 class AzurePlainTranscriber:
-    def __init__(self, language: str = "nl-NL", results: dict | None = None, realtime: bool = True):
+    def __init__(
+        self,
+        language: str = "nl-NL",
+        results: dict | None = None,
+        realtime: bool = True,
+        *,
+        audio_queue: queue.Queue | None = None,
+        sample_rate: int = 16000,
+    ):
         load_dotenv()
         key    = os.getenv("AZURE_SPEECH_KEY")
         region = os.getenv("AZURE_SPEECH_REGION")
@@ -231,16 +309,31 @@ class AzurePlainTranscriber:
 
         self.realtime = realtime
         self.speech_config = speech_config
-        if self.realtime:
+        self.audio_queue = audio_queue
+        self.sample_rate = sample_rate
+        self._push_stream = None
+        self._feed_thread = None
+
+        if self.realtime and self.audio_queue is not None:
+            fmt = speechsdk.audio.AudioStreamFormat(
+                samples_per_second=self.sample_rate,
+                bits_per_sample=16,
+                channels=1,
+            )
+            self._push_stream = speechsdk.audio.PushAudioInputStream(stream_format=fmt)
+            audio_config = speechsdk.audio.AudioConfig(stream=self._push_stream)
+        else:
             audio_config = speechsdk.audio.AudioConfig(use_default_microphone=True)
+
+        if self.realtime:
             self.recognizer = speechsdk.SpeechRecognizer(
                 speech_config=self.speech_config,
                 audio_config=audio_config
             )
-
-        if self.realtime:
             self.recognizer.recognizing.connect(self._on_interim)
             self.recognizer.recognized.connect(self._on_final)
+            if self.audio_queue is not None:
+                self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
 
         self._done_event = threading.Event()
         if self.realtime:
@@ -254,6 +347,23 @@ class AzurePlainTranscriber:
                 "final_transcript": None,
                 "interim_transcripts": []
             }
+
+    # ------------------------------------------------------------------ internal
+    def _feed_audio(self):
+        if self._push_stream is None or self.audio_queue is None:
+            return
+        while True:
+            pcm = self.audio_queue.get()
+            if pcm is None:
+                break
+            try:
+                self._push_stream.write(pcm.tobytes())
+            except Exception:
+                break
+        try:
+            self._push_stream.close()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
@@ -281,6 +391,8 @@ class AzurePlainTranscriber:
             return
         self._running = True
         console.print(Panel.fit("▶ [bold blue]Azure PlainTranscriber listening…[/bold blue]", border_style="blue"))
+        if self._feed_thread is not None:
+            self._feed_thread.start()
         self.recognizer.start_continuous_recognition()
 
     def stop(self, timeout: float = 1.0):
@@ -289,6 +401,8 @@ class AzurePlainTranscriber:
         self._running = False
         console.print("[red]■ Stopping Azure Plain…[/red]")
         self.recognizer.stop_continuous_recognition()
+        if self._feed_thread is not None:
+            self._feed_thread.join()
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Plain stopped.[/red]\n")
 
