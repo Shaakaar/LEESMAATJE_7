@@ -58,7 +58,9 @@ class RecorderPipeline:
                  sample_rate: Optional[int] = None,
                  chunk_duration: float = 5,
                  language: str = "nl-NL",
-                 rt_flags: Optional[Dict[str, bool]] = None):
+                 rt_flags: Optional[Dict[str, bool]] = None,
+                 *,
+                 use_push_to_azure: bool = False):
 
         # Pick best available sample rate if not supplied
         if sample_rate is None:
@@ -76,6 +78,7 @@ class RecorderPipeline:
         self.chunk_duration = chunk_duration
         self.language = language
         self._ph_cache: dict[str, dict[str, str]] = {}
+        self.use_push_to_azure = use_push_to_azure
 
         def _env_flag(key: str, default: str = "true") -> bool:
             return os.getenv(key, default).lower() in ("1", "true", "yes", "on")
@@ -113,7 +116,15 @@ class RecorderPipeline:
         # Dedicated audio queues so each engine receives the full stream
         phon_q = queue.Queue()
         asr_q = queue.Queue()
-        flush_audio_queue([phon_q, asr_q])
+        audio_queues = [phon_q, asr_q]
+        azure_pron_q = azure_plain_q = None
+        if self.use_push_to_azure and self.rt_flags["azure_pron"]:
+            azure_pron_q = queue.Queue()
+            audio_queues.append(azure_pron_q)
+        if self.use_push_to_azure and self.rt_flags["azure_plain"]:
+            azure_plain_q = queue.Queue()
+            audio_queues.append(azure_plain_q)
+        flush_audio_queue(audio_queues)
         # ---------- shared results dict ----------------------------------
         results: Dict[str, Any] = {
             "session_id": session_id,
@@ -144,11 +155,15 @@ class RecorderPipeline:
             reference_text,
             results=results,
             realtime=self.rt_flags["azure_pron"],
+            audio_queue=azure_pron_q,
+            sample_rate=self.sample_rate,
         )
         azure_plain = AzurePlainTranscriber(
             language=self.language,
             results=results,
             realtime=self.rt_flags["azure_plain"],
+            audio_queue=azure_plain_q,
+            sample_rate=self.sample_rate,
         )
 
         extractor_phonemes = Wav2Vec2PhonemeExtractor(
@@ -171,7 +186,7 @@ class RecorderPipeline:
             channels=1,
             block_duration_ms=20,
             use_vad=False,          # you can expose this as parameter later
-            audio_queue=[phon_q, asr_q],
+            audio_queue=audio_queues,
         )
 
         # ---------- start threads ----------------------------------------
