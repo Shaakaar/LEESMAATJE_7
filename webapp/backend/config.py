@@ -54,6 +54,9 @@ REALTIME_FLAGS = {
 PARALLEL_OFFLINE = True
 CHUNK_DURATION = 10
 
+# Stream audio from the recorder to Azure instead of using a separate microphone
+AZURE_PUSH_STREAM = True
+
 # GPT model settings
 GPT_PROVIDER = os.getenv("GPT_TUTOR_PROVIDER", "openai")
 GPT_MODEL = os.getenv("GPT_TUTOR_MODEL", "gpt-4o-mini")

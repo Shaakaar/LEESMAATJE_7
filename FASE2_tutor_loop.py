@@ -13,6 +13,7 @@ from rich.panel import Panel
 from FASE2_recorder_pipeline import RecorderPipeline
 from tutor import prompt_builder, gpt_client
 from FASE2_TTS import speak, start_filler, STREAMING_TTS
+from webapp.backend import config
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -62,8 +63,6 @@ REALTIME_FLAGS = {
 # Run offline engines in parallel?
 PARALLEL_OFFLINE = True
 CHUNK_DURATION = 10
-# Stream audio from the recorder to Azure instead of using a second microphone
-AZURE_PUSH_STREAM = True
 
 def save_json(payload: dict):
     """Serialize results to file for later analysis."""
@@ -77,7 +76,7 @@ def save_json(payload: dict):
 def main():
     pipeline = RecorderPipeline(rt_flags=REALTIME_FLAGS,
                                 chunk_duration=CHUNK_DURATION,
-                                use_push_to_azure=AZURE_PUSH_STREAM)
+                                use_push_to_azure=config.AZURE_PUSH_STREAM)
 
     for sentence in SENTENCES:
         need_prompt = True
