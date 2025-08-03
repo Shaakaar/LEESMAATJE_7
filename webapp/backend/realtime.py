@@ -50,7 +50,12 @@ class RealtimeSession:
         }
 
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        # Close the NamedTemporaryFile handle so Windows (and other platforms)
+        # allow ``wave.open`` to reuse the path.  Failing to close here can
+        # result in an empty/locked file which later leads to empty
+        # Wav2Vec2/ Azure offline results.
         self.wav_path = tmp.name
+        tmp.close()
         self.results["audio_file"] = self.wav_path
         self.wavefile = wave.open(self.wav_path, "wb")
         self.wavefile.setnchannels(1)
@@ -108,7 +113,9 @@ class RealtimeSession:
 
     def add_chunk(self, pcm_data: bytes):
         """Add a chunk of 16‑bit mono PCM data."""
-        arr = np.frombuffer(pcm_data, dtype=np.int16)
+        # Ensure little-endian interpretation regardless of platform
+        arr = np.frombuffer(pcm_data, dtype="<i2")
+
         # Fan out chunk to all engine queues
         self.phon_q.put(arr)
         self.asr_q.put(arr)
@@ -116,7 +123,9 @@ class RealtimeSession:
             self.azure_pron_q.put(arr)
         if self.azure_plain_q is not None:
             self.azure_plain_q.put(arr)
-        self.wavefile.writeframes(pcm_data)
+
+        # Persist to the session WAV file
+        self.wavefile.writeframes(arr.tobytes())
 
     def stop(self) -> Dict[str, Any]:
         """Finalize processing and return results."""
@@ -129,6 +138,12 @@ class RealtimeSession:
         if self.azure_plain_q is not None:
             self.azure_plain_q.put(None)
         self.wavefile.close()
+        # Helpful debug: warn if the recorded file is unexpectedly empty
+        try:
+            if os.path.getsize(self.wav_path) == 0:
+                console.log(f"[red][RealtimeSession] recorded WAV is empty: {self.wav_path}[/red]")
+        except OSError:
+            pass
         if self.phon_thread.realtime:
             # Allow the thread to drain remaining audio from the queue.
             # A sentinel has already been enqueued, so simply join instead
