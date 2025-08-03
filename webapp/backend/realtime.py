@@ -23,7 +23,9 @@ class RealtimeSession:
     """Manage realtime audio analysis for one sentence."""
 
     def __init__(self, sentence: str, sample_rate: int = 16000, *, filler_audio: str | None = None, teacher_id: int = 0, student_id: int = 0):
-        self.audio_q = queue.Queue()
+        # Separate queues for phoneme and ASR engines so each receives full audio
+        self.phon_q = queue.Queue()
+        self.asr_q = queue.Queue()
         self.id = str(uuid.uuid4())
         self.sentence = sentence
         self.sample_rate = sample_rate
@@ -60,14 +62,14 @@ class RealtimeSession:
             chunk_duration=config.CHUNK_DURATION,
             results=self.results,
             realtime=rt.get("w2v2_phonemes", True),
-            audio_queue=self.audio_q,
+            audio_queue=self.phon_q,
         )
         self.asr_thread = Wav2Vec2Transcriber(
             sample_rate=self.sample_rate,
             chunk_duration=config.CHUNK_DURATION,
             results=self.results,
             realtime=rt.get("w2v2_asr", True),
-            audio_queue=self.audio_q,
+            audio_queue=self.asr_q,
         )
 
         # Azure engines
@@ -93,14 +95,17 @@ class RealtimeSession:
     def add_chunk(self, pcm_data: bytes):
         """Add a chunk of 16‑bit mono PCM data."""
         arr = np.frombuffer(pcm_data, dtype=np.int16)
-        self.audio_q.put(arr)
+        # Fan out chunk to both queues
+        self.phon_q.put(arr)
+        self.asr_q.put(arr)
         self.wavefile.writeframes(pcm_data)
 
     def stop(self) -> Dict[str, Any]:
         """Finalize processing and return results."""
         # Allow final chunks to arrive before signaling end-of-stream
         time.sleep(0.5)
-        self.audio_q.put(None)
+        self.phon_q.put(None)
+        self.asr_q.put(None)
         self.wavefile.close()
         if self.phon_thread.realtime:
             self.phon_thread.stop()
@@ -124,7 +129,7 @@ class RealtimeSession:
         else:
             self.azure_plain.process_file(self.wav_path)
 
-        flush_audio_queue(self.audio_q)
+        flush_audio_queue([self.phon_q, self.asr_q])
 
         self.results["end_time"] = time.time()
         req, messages = prompt_builder.build(self.results, state={})
