@@ -34,6 +34,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   const rafRef = useRef<number | null>(null);
 
   function sendChunk(blob: Blob) {
+    console.log('uploading chunk', blob.size, 'bytes');
     const form = new FormData();
     form.append('file', blob, 'chunk.pcm');
     fetch(`/api/realtime/chunk/${sessionIdRef.current}`, { method: 'POST', body: form });
@@ -130,9 +131,11 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
       const pcm = e.data as Int16Array;
       recordedChunksRef.current.push(pcm);
       const blob = new Blob([pcm], { type: 'application/octet-stream' });
+      console.log('created chunk', blob.size, 'bytes');
       if (sessionIdRef.current) {
         sendChunk(blob);
       } else {
+        console.log('queued chunk', blob.size, 'bytes');
         pendingChunksRef.current.push(blob);
       }
     };

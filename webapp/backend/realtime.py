@@ -109,6 +109,7 @@ class RealtimeSession:
     def add_chunk(self, pcm_data: bytes):
         """Add a chunk of 16‑bit mono PCM data."""
         arr = np.frombuffer(pcm_data, dtype=np.int16)
+        console.log(f"received chunk of {len(pcm_data)} bytes")
         # Fan out chunk to all engine queues
         self.phon_q.put(arr)
         self.asr_q.put(arr)
