@@ -16,34 +16,6 @@ let pendingChunks = [];
 let startPromise = null;
 let analyser;
 let dataArray;
-// Buffer outgoing audio so we don't flood the backend with tiny requests.
-// Each chunk from the worklet is only ~128 samples, which results in hundreds
-// of HTTP requests per second and many dropped uploads.  We aggregate several
-// chunks and upload ~0.5–1s of audio at a time instead.
-let sendBuffer = [];
-let sendBufferLen = 0;
-const MIN_CHUNK_SAMPLES = 8000; // ~0.5s @ 16kHz
-
-function flushSendBuffer(){
-  if(sendBufferLen === 0) return;
-  const flat = new Int16Array(sendBufferLen);
-  let pos = 0;
-  for(const c of sendBuffer){
-    flat.set(c,pos);
-    pos += c.length;
-  }
-  const blob = new Blob([flat], {type:'application/octet-stream'});
-  if(sessionId){
-    const f = new FormData();
-    f.append('file', blob, 'chunk.pcm');
-    fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
-  } else {
-    pendingChunks.push(blob);
-  }
-  console.log('Sent', flat.length, 'samples');
-  sendBuffer = [];
-  sendBufferLen = 0;
-}
 
 const statusEl = document.getElementById('status');
 const sentenceEl = document.getElementById('sentence');
@@ -162,17 +134,17 @@ async function startRecording(){
   source.connect(analyser);
   analyser.connect(processor);
   processor.connect(audioCtx.destination);
-  // Reset aggregation buffers for this recording session
-  sendBuffer = [];
-  sendBufferLen = 0;
   processor.port.onmessage = e => {
     if(!recording) return;
     const pcm = e.data;
     recordedChunks.push(pcm);
-    sendBuffer.push(pcm);
-    sendBufferLen += pcm.length;
-    if(sendBufferLen >= MIN_CHUNK_SAMPLES){
-      flushSendBuffer();
+    const blob = new Blob([pcm], {type:'application/octet-stream'});
+    if(sessionId){
+      const f = new FormData();
+      f.append('file', blob, 'chunk.pcm');
+      fetch('/api/realtime/chunk/'+sessionId, {method:'POST', body:f});
+    } else {
+      pendingChunks.push(blob);
     }
   };
   recordedChunks = [];
@@ -199,8 +171,6 @@ micBtn.onclick = () => {
 async function stopRecording(){
   recording = false;
   stopVisualizer();
-  // Flush any remaining buffered audio before tearing down
-  flushSendBuffer();
   processor.disconnect();
   stream.getTracks().forEach(t => t.stop());
   micBtn.disabled = true;
