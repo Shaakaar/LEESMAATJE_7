@@ -72,6 +72,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   }
 
   async function startRecording() {
+    console.log('startRecording');
     if (!sentence) return;
     let stream: MediaStream;
     try {
@@ -117,14 +118,24 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     analyserRef.current = analyser;
     dataArrayRef.current = dataArray;
 
-    await audioCtx.audioWorklet.addModule(
-      `${import.meta.env.BASE_URL}pcm-worklet.js`,
-    );
+    try {
+      await audioCtx.audioWorklet.addModule(
+        `${import.meta.env.BASE_URL}pcm-worklet.js`,
+      );
+      console.log('Audio worklet module loaded');
+    } catch (err) {
+      console.error('Error loading audio worklet module', err);
+      setStatus(
+        'Fout: ' + (err instanceof Error ? err.message : String(err)),
+      );
+      return;
+    }
     const processor = new AudioWorkletNode(audioCtx, 'pcm-processor');
     processorRef.current = processor;
     source.connect(analyser);
     analyser.connect(processor);
     processor.connect(audioCtx.destination);
+    console.log('Setting processor port message handler');
     processor.port.onmessage = (e) => {
       if (!recording) return;
       const pcm = e.data as Int16Array;
