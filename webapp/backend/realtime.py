@@ -56,6 +56,7 @@ class RealtimeSession:
         self.wavefile.setnchannels(1)
         self.wavefile.setsampwidth(2)
         self.wavefile.setframerate(self.sample_rate)
+        self.chunk_count = 0
 
         rt = config.REALTIME_FLAGS
 
@@ -109,7 +110,8 @@ class RealtimeSession:
     def add_chunk(self, pcm_data: bytes):
         """Add a chunk of 16‑bit mono PCM data."""
         arr = np.frombuffer(pcm_data, dtype=np.int16)
-        console.log(f"received chunk of {len(pcm_data)} bytes")
+        self.chunk_count += 1
+        console.log(f"received chunk {self.chunk_count} of {len(pcm_data)} bytes")
         # Fan out chunk to all engine queues
         self.phon_q.put(arr)
         self.asr_q.put(arr)
@@ -159,6 +161,7 @@ class RealtimeSession:
         queues = [q for q in (self.phon_q, self.asr_q, self.azure_pron_q, self.azure_plain_q) if q is not None]
         flush_audio_queue(queues)
 
+        console.log(f"wrote {self.chunk_count} chunks totalling {os.path.getsize(self.wav_path)} bytes")
         self.results["end_time"] = time.time()
         req, messages = prompt_builder.build(self.results, state={})
         console.rule("[bold green]System Prompt[/bold green]")

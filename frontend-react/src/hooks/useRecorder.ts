@@ -74,6 +74,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
 
   async function startRecording() {
     if (!sentence) return;
+    console.log('startRecording called');
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -85,6 +86,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     streamRef.current = stream;
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
+    console.log('microphone ready at', audioCtx.sampleRate, 'Hz');
 
     const fd = new FormData();
     fd.append('sentence', sentence);
@@ -149,6 +151,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   }
 
   async function stopRecording() {
+    console.log('stopRecording called');
     setRecording(false);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     drawWave(0);
@@ -185,6 +188,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
         return;
       }
       const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
+      console.log('flushing', recordedChunksRef.current.length, 'chunks totalling', total * 2, 'bytes');
       const flat = new Int16Array(total);
       let pos = 0;
       for (const c of recordedChunksRef.current) {
@@ -192,6 +196,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
         pos += c.length;
       }
       const wav = encodeWav(flat, audioCtxRef.current!.sampleRate);
+      console.log('final wav blob', wav.size, 'bytes');
       const url = URL.createObjectURL(wav);
       setPlaybackUrl(url);
       onFeedback(data);
