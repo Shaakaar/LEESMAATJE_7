@@ -29,7 +29,6 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   const delayRef = useRef<number>(0);
   const pendingChunksRef = useRef<Blob[]>([]);
   const recordedChunksRef = useRef<Int16Array[]>([]);
-  const uploadBufferRef = useRef<Int16Array>(new Int16Array());
   const startPromiseRef = useRef<Promise<void> | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -130,20 +129,11 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
       if (!recording) return;
       const pcm = e.data as Int16Array;
       recordedChunksRef.current.push(pcm);
-      const combined = new Int16Array(uploadBufferRef.current.length + pcm.length);
-      combined.set(uploadBufferRef.current);
-      combined.set(pcm, uploadBufferRef.current.length);
-      uploadBufferRef.current = combined;
-      const threshold = Math.floor(audioCtx.sampleRate / 2);
-      if (uploadBufferRef.current.length >= threshold) {
-        const chunk = uploadBufferRef.current.slice(0, threshold);
-        uploadBufferRef.current = uploadBufferRef.current.slice(threshold);
-        const blob = new Blob([chunk], { type: 'application/octet-stream' });
-        if (sessionIdRef.current) {
-          sendChunk(blob);
-        } else {
-          pendingChunksRef.current.push(blob);
-        }
+      const blob = new Blob([pcm], { type: 'application/octet-stream' });
+      if (sessionIdRef.current) {
+        sendChunk(blob);
+      } else {
+        pendingChunksRef.current.push(blob);
       }
     };
 
@@ -161,15 +151,6 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     drawWave(0);
     processorRef.current?.disconnect();
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    if (uploadBufferRef.current.length > 0) {
-      const blob = new Blob([uploadBufferRef.current], { type: 'application/octet-stream' });
-      if (sessionIdRef.current) {
-        sendChunk(blob);
-      } else {
-        pendingChunksRef.current.push(blob);
-      }
-      uploadBufferRef.current = new Int16Array();
-    }
     setStatus('Analyseren');
 
     if (startPromiseRef.current) {
