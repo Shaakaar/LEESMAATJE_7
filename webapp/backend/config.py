@@ -41,8 +41,8 @@ VOICE_INSTRUCTIONS = (
 )
 
 # Separate model for word-level TTS generation
-WORD_VOICE_MODEL = "tts-1"
-WORD_VOICE_LANGUAGE = "nl"
+WORD_VOICE_MODEL = "gpt-4o-mini-tts"
+WORD_VOICE_INSTRUCTIONS = "Spreek in Nederlands"
 
 # Delay before playing filler sentence after stop (seconds)
 DELAY_SECONDS = 0.5
