@@ -5,6 +5,8 @@ const DEBUG = false; // set true to enable chunk logs
 const PCM_QUEUE: Int16Array[] = [];
 let lastSend = 0;
 
+const FILLER_AUDIO = "de_zin_was.wav";
+
 export interface FeedbackData {
   feedback_text: string;
   feedback_audio: string;
@@ -14,6 +16,7 @@ export interface FeedbackData {
 
 interface RecorderOptions {
   sentence: string;
+  sentenceAudio?: string;
   teacherId: number;
   studentId: string;
   onFeedback: (data: FeedbackData) => void;
@@ -22,6 +25,7 @@ interface RecorderOptions {
 
 export function useRecorder({
   sentence,
+  sentenceAudio,
   teacherId,
   studentId,
   onFeedback,
@@ -38,7 +42,6 @@ export function useRecorder({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sessionIdRef = useRef<string | null>(null);
-  const fillerAudioRef = useRef<string | null>(null);
   const delayRef = useRef<number>(0);
   const recordedChunksRef = useRef<Int16Array[]>([]);
   const dataArrayRef = useRef<Uint8Array | null>(null);
@@ -119,7 +122,6 @@ export function useRecorder({
         const j = await r.json();
         if (!r.ok) throw new Error(j.detail);
         sessionIdRef.current = j.session_id;
-        fillerAudioRef.current = j.filler_audio;
         delayRef.current = j.delay_seconds;
       } catch (err) {
         setStatus(
@@ -131,7 +133,6 @@ export function useRecorder({
       }
     } else {
       sessionIdRef.current = null;
-      fillerAudioRef.current = null;
       delayRef.current = 0;
     }
 
@@ -236,10 +237,14 @@ export function useRecorder({
       sessionIdRef.current = null;
       setTimeout(async () => {
         setStatus("Feedback afspelen");
-        const filler = fillerAudioRef.current;
-        if (filler)
+        await new Promise((res) => {
+          const a = new Audio("/api/audio/" + FILLER_AUDIO);
+          a.onended = res;
+          a.play();
+        });
+        if (sentenceAudio)
           await new Promise((res) => {
-            const a = new Audio("/api/audio/" + filler);
+            const a = new Audio("/api/audio/" + sentenceAudio);
             a.onended = res;
             a.play();
           });
@@ -286,7 +291,7 @@ export function useRecorder({
     fd.append("sentence", sentence);
     fd.append("teacher_id", String(teacherId));
     fd.append("student_id", studentId);
-    let data: FeedbackData & { filler_audio: string; delay_seconds: number };
+    let data: FeedbackData & { delay_seconds: number };
     try {
       const r = await fetch("/api/process", { method: "POST", body: fd });
       const j = await r.json();
@@ -299,20 +304,24 @@ export function useRecorder({
     const url = URL.createObjectURL(wav);
     setPlaybackUrl(url);
     setTimeout(
-      async () => {
-        setStatus("Feedback afspelen");
-        if (data.filler_audio) {
+        async () => {
+          setStatus("Feedback afspelen");
           await new Promise((res) => {
-            const a = new Audio("/api/audio/" + data.filler_audio);
+            const a = new Audio("/api/audio/" + FILLER_AUDIO);
             a.onended = res;
             a.play();
           });
-        }
-        const fb = new Audio("/api/audio/" + data.feedback_audio);
-        onFeedback(data);
-        fb.onended = () => setStatus("");
-        fb.play();
-      },
+          if (sentenceAudio)
+            await new Promise((res) => {
+              const a = new Audio("/api/audio/" + sentenceAudio);
+              a.onended = res;
+              a.play();
+            });
+          const fb = new Audio("/api/audio/" + data.feedback_audio);
+          onFeedback(data);
+          fb.onended = () => setStatus("");
+          fb.play();
+        },
       (data.delay_seconds ?? 0) * 1000,
     );
   }
