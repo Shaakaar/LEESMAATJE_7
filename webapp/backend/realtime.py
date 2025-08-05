@@ -17,6 +17,7 @@ from . import config, analysis_pipeline
 import prompt_builder
 
 console = Console()
+DEBUG_CHUNKS = False
 
 
 class RealtimeSession:
@@ -111,7 +112,8 @@ class RealtimeSession:
         """Add a chunk of 16‑bit mono PCM data."""
         arr = np.frombuffer(pcm_data, dtype=np.int16)
         self.chunk_count += 1
-        console.log(f"received chunk {self.chunk_count} of {len(pcm_data)} bytes")
+        if DEBUG_CHUNKS:
+            console.log(f"received chunk {self.chunk_count} of {len(pcm_data)} bytes")
         # Fan out chunk to all engine queues
         self.phon_q.put(arr)
         self.asr_q.put(arr)

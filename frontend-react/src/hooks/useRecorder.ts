@@ -1,6 +1,9 @@
 import { useRef, useState } from 'react';
 
-const DEBUG = false;
+const SEND_INTERVAL_MS = 100; // how often to upload audio (in ms)
+const DEBUG = false; // set true to enable chunk logs
+const PCM_QUEUE: Int16Array[] = [];
+let lastSend = 0;
 
 export interface FeedbackData {
   feedback_text: string;
@@ -37,7 +40,6 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   const rafRef = useRef<number | null>(null);
 
   function sendChunk(blob: Blob) {
-    if (DEBUG) console.log('chunk', blob.size);
     const form = new FormData();
     form.append('file', blob, 'chunk.pcm');
     fetch(`/api/realtime/chunk/${sessionIdRef.current}`, { method: 'POST', body: form });
@@ -89,7 +91,6 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     streamRef.current = stream;
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
-    console.log('microphone ready at', audioCtx.sampleRate, 'Hz');
 
     const fd = new FormData();
     fd.append('sentence', sentence);
@@ -127,7 +128,6 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
       await audioCtx.audioWorklet.addModule(
         `${import.meta.env.BASE_URL}pcm-worklet.js`,
       );
-      console.log('Audio worklet module loaded');
     } catch (err) {
       console.error('Error loading audio worklet module', err);
       setStatus(
@@ -140,17 +140,26 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     source.connect(analyser);
     analyser.connect(processor);
     processor.connect(audioCtx.destination);
-    console.log('Setting processor port message handler');
     processor.port.onmessage = (e) => {
       if (!recordingRef.current) return;
       const pcm = e.data as Int16Array;
       recordedChunksRef.current.push(pcm);
-      const blob = new Blob([pcm], { type: 'application/octet-stream' });
-      if (DEBUG) console.log('chunk', blob.size);
+      PCM_QUEUE.push(pcm);
+      const now = performance.now();
+      if (now - lastSend < SEND_INTERVAL_MS) return;
+      lastSend = now;
+
+      const total = PCM_QUEUE.reduce((n, c) => n + c.length, 0);
+      const flat = new Int16Array(total);
+      let pos = 0;
+      for (const c of PCM_QUEUE) { flat.set(c, pos); pos += c.length; }
+      PCM_QUEUE.length = 0;
+
+      const blob = new Blob([flat], { type: 'application/octet-stream' });
       if (sessionIdRef.current) {
+        if (DEBUG) console.log('send chunk', blob.size, 'bytes');
         sendChunk(blob);
       } else {
-        console.log('queued chunk', blob.size, 'bytes');
         pendingChunksRef.current.push(blob);
       }
     };
@@ -165,7 +174,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   }
 
   async function stopRecording() {
-    console.log('stopRecording called');
+    console.log('stopRecording');
     recordingRef.current = false;
     setRecording(false);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -180,6 +189,14 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
       } catch {
         return;
       }
+    }
+    if (PCM_QUEUE.length) {
+      const total = PCM_QUEUE.reduce((n, c) => n + c.length, 0);
+      const flat = new Int16Array(total);
+      let pos = 0;
+      for (const c of PCM_QUEUE) { flat.set(c, pos); pos += c.length; }
+      PCM_QUEUE.length = 0;
+      sendChunk(new Blob([flat], { type: 'application/octet-stream' }));
     }
     const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, { method: 'POST' }).then(async (r) => {
       const j = await r.json();
@@ -203,7 +220,6 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
         return;
       }
       const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
-      console.log('flushing', recordedChunksRef.current.length, 'chunks totalling', total * 2, 'bytes');
       const flat = new Int16Array(total);
       let pos = 0;
       for (const c of recordedChunksRef.current) {
