@@ -302,13 +302,15 @@ async def realtime_start(
 
     filler_text = f"De zin was {sentence}"
     filler_audio = tts_to_file(filler_text)
-    sess = engine_pool.get(
+    sess, old_id = engine_pool.get(
         teacher_id,
         student_id,
         sentence,
         sample_rate,
         filler_audio,
     )
+    if old_id:
+        sessions.pop(old_id, None)
     sessions[sess.id] = sess
     return {
         "session_id": sess.id,

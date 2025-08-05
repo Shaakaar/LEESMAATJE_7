@@ -28,8 +28,18 @@ class RealtimeSession:
     :py:meth:`reset` prepares the session for a new recording.
     """
 
-    def __init__(self, sentence: str, sample_rate: int = 16000, *, filler_audio: str | None = None, teacher_id: int = 0, student_id: int = 0):
-        self.id = str(uuid.uuid4())
+    def __init__(
+        self,
+        sentence: str,
+        sample_rate: int = 16000,
+        *,
+        filler_audio: str | None = None,
+        teacher_id: int = 0,
+        student_id: int = 0,
+    ):
+        # ``reset`` generates a fresh ``session_id`` for every recording so that
+        # results can be stored without clashing primary keys.  ``__init__``
+        # simply delegates to ``reset`` for the initial setup.
         self.last_used = time.time()
         self.reset(
             sentence,
@@ -40,8 +50,19 @@ class RealtimeSession:
         )
 
     # ------------------------------------------------------------------ lifecycle
-    def reset(self, sentence: str, *, sample_rate: int = 16000, filler_audio: str | None = None, teacher_id: int = 0, student_id: int = 0) -> None:
+    def reset(
+        self,
+        sentence: str,
+        *,
+        sample_rate: int = 16000,
+        filler_audio: str | None = None,
+        teacher_id: int = 0,
+        student_id: int = 0,
+    ) -> None:
         """Prepare the session for a new recording."""
+        # Generate a new unique identifier so that each recording can be stored
+        # separately in the database and on disk.
+        self.id = str(uuid.uuid4())
         self.last_used = time.time()
         self.sentence = sentence
         self.sample_rate = sample_rate
@@ -65,7 +86,10 @@ class RealtimeSession:
             "azure_pronunciation": None,
             "wav2vec2_asr": None,
             "wav2vec2_phonemes": None,
-            "metadata": {"language": "nl-NL", "chunk_duration": config.CHUNK_DURATION},
+            "metadata": {
+                "language": "nl-NL",
+                "chunk_duration": config.CHUNK_DURATION,
+            },
         }
 
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)

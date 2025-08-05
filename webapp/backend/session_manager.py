@@ -3,7 +3,7 @@ from __future__ import annotations
 """Simple pool that reuses realtime analysis engines between recordings."""
 
 from dataclasses import dataclass, field
-from typing import Dict, Tuple
+from typing import Dict
 
 from . import realtime
 
@@ -12,7 +12,7 @@ from . import realtime
 class EnginePool:
     """Keep already initialised :class:`RealtimeSession` objects warm."""
 
-    _pool: Dict[Tuple[int, int], realtime.RealtimeSession] = field(default_factory=dict)
+    _pool: Dict[tuple[int, int], realtime.RealtimeSession] = field(default_factory=dict)
 
     def get(
         self,
@@ -21,15 +21,18 @@ class EnginePool:
         sentence: str,
         sample_rate: int,
         filler_audio: str | None,
-    ) -> realtime.RealtimeSession:
+    ) -> tuple[realtime.RealtimeSession, str | None]:
         """Return an initialised session for the given user pair.
 
         The first request creates a new session.  Subsequent calls reset the
         existing session so that the heavy recogniser objects stay in memory.
+        Returns the session and, if an existing session was reused, the previous
+        ``session_id`` so callers can drop obsolete references.
         """
 
         key = (teacher_id, student_id)
         sess = self._pool.get(key)
+        old_id: str | None = None
         if sess is None:
             sess = realtime.RealtimeSession(
                 sentence,
@@ -40,6 +43,9 @@ class EnginePool:
             )
             self._pool[key] = sess
         else:
+            # Preserve the previous identifier so the caller can discard it from
+            # any lookup structures.
+            old_id = sess.id
             sess.reset(
                 sentence,
                 sample_rate=sample_rate,
@@ -47,7 +53,7 @@ class EnginePool:
                 teacher_id=teacher_id,
                 student_id=student_id,
             )
-        return sess
+        return sess, old_id
 
     def cleanup(self, max_idle: float = 600.0) -> None:
         """Remove sessions that have been idle for ``max_idle`` seconds."""
