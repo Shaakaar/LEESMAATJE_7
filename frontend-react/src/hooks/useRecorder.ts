@@ -34,9 +34,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   const sessionIdRef = useRef<string | null>(null);
   const fillerAudioRef = useRef<string | null>(null);
   const delayRef = useRef<number>(0);
-  const pendingChunksRef = useRef<Blob[]>([]);
   const recordedChunksRef = useRef<Int16Array[]>([]);
-  const startPromiseRef = useRef<Promise<void> | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const rafRef = useRef<number | null>(null);
   const realtimeRef = useRef(true);
@@ -93,49 +91,47 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   async function startRecording() {
     console.log('startRecording');
     if (!sentence) return;
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setStatus('Fout: ' + message);
-      return;
-    }
-    streamRef.current = stream;
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
     sampleRateRef.current = audioCtx.sampleRate;
     lastSend = 0;
+
     if (realtimeRef.current) {
       const fd = new FormData();
       fd.append('sentence', sentence);
       fd.append('sample_rate', String(audioCtx.sampleRate));
       fd.append('teacher_id', String(teacherId));
       fd.append('student_id', studentId);
-
-      pendingChunksRef.current = [];
-      startPromiseRef.current = fetch('/api/realtime/start', { method: 'POST', body: fd })
-        .then(async (r) => {
-          const j = await r.json();
-          if (!r.ok) throw new Error(j.detail);
-          sessionIdRef.current = j.session_id;
-          fillerAudioRef.current = j.filler_audio;
-          delayRef.current = j.delay_seconds;
-          for (const blob of pendingChunksRef.current) sendChunk(blob);
-          pendingChunksRef.current = [];
-        })
-        .catch((err) => {
-          setStatus('Fout: ' + err.message);
-          setRecording(false);
-        })
-        .finally(() => {
-          startPromiseRef.current = null;
-        });
+      try {
+        const r = await fetch('/api/realtime/start', { method: 'POST', body: fd });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail);
+        sessionIdRef.current = j.session_id;
+        fillerAudioRef.current = j.filler_audio;
+        delayRef.current = j.delay_seconds;
+      } catch (err) {
+        setStatus('Fout: ' + (err instanceof Error ? err.message : String(err)));
+        await audioCtx.close();
+        audioCtxRef.current = null;
+        return;
+      }
     } else {
       sessionIdRef.current = null;
       fillerAudioRef.current = null;
       delayRef.current = 0;
     }
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStatus('Fout: ' + message);
+      await audioCtx.close();
+      audioCtxRef.current = null;
+      return;
+    }
+    streamRef.current = stream;
 
     const source = audioCtx.createMediaStreamSource(stream);
     const analyser = audioCtx.createAnalyser();
@@ -177,12 +173,8 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
       PCM_QUEUE.length = 0;
 
       const blob = new Blob([flat], { type: 'application/octet-stream' });
-      if (sessionIdRef.current) {
-        if (DEBUG) console.log('send chunk', blob.size, 'bytes');
-        sendChunk(blob);
-      } else {
-        pendingChunksRef.current.push(blob);
-      }
+      if (sessionIdRef.current && DEBUG) console.log('send chunk', blob.size, 'bytes');
+      if (sessionIdRef.current) sendChunk(blob);
     };
 
     recordedChunksRef.current = [];
@@ -207,13 +199,6 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     audioCtxRef.current = null;
     setStatus('Analyseren');
     if (realtimeRef.current) {
-      if (startPromiseRef.current) {
-        try {
-          await startPromiseRef.current;
-        } catch {
-          return;
-        }
-      }
       if (PCM_QUEUE.length) {
         const total = PCM_QUEUE.reduce((n, c) => n + c.length, 0);
         const flat = new Int16Array(total);
