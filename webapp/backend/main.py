@@ -259,6 +259,12 @@ async def get_audio(name: str):
     stored = storage.STORAGE_DIR / name
     if stored.exists():
         return FileResponse(stored, media_type="audio/wav")
+    # Word-level TTS files are cached in a dedicated subdirectory.  When the
+    # frontend requests a file like ``/api/audio/de.wav`` we need to look for it
+    # in that cache as well.
+    word_path = storage.STORAGE_DIR / "words" / name
+    if word_path.exists():
+        return FileResponse(word_path, media_type="audio/wav")
     raise HTTPException(status_code=404, detail="Audio not found")
 
 
