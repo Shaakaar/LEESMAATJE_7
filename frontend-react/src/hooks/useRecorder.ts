@@ -239,6 +239,11 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
         console.log('final wav blob', wav.size, 'bytes');
         const url = URL.createObjectURL(wav);
         setPlaybackUrl(url);
+        const fb = new Audio('/api/audio/' + data.feedback_audio);
+        await new Promise((res) => {
+          fb.onended = res;
+          fb.play();
+        });
         onFeedback(data);
         setStatus('');
       }, delayRef.current * 1000);
