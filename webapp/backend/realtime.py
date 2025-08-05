@@ -21,22 +21,40 @@ DEBUG_CHUNKS = False
 
 
 class RealtimeSession:
-    """Manage realtime audio analysis for one sentence."""
+    """Manage realtime audio analysis for one sentence.
+
+    A ``RealtimeSession`` instance is intended to be reused for multiple
+    recordings.  Heavy recogniser objects are created once and a lightweight
+    :py:meth:`reset` prepares the session for a new recording.
+    """
 
     def __init__(self, sentence: str, sample_rate: int = 16000, *, filler_audio: str | None = None, teacher_id: int = 0, student_id: int = 0):
-        # Separate queues for phoneme, ASR and (optionally) Azure engines so
-        # each receives the full stream.
-        self.phon_q = queue.Queue()
-        self.asr_q = queue.Queue()
-        self.azure_pron_q = None
-        self.azure_plain_q = None
         self.id = str(uuid.uuid4())
+        self.last_used = time.time()
+        self.reset(
+            sentence,
+            sample_rate=sample_rate,
+            filler_audio=filler_audio,
+            teacher_id=teacher_id,
+            student_id=student_id,
+        )
+
+    # ------------------------------------------------------------------ lifecycle
+    def reset(self, sentence: str, *, sample_rate: int = 16000, filler_audio: str | None = None, teacher_id: int = 0, student_id: int = 0) -> None:
+        """Prepare the session for a new recording."""
+        self.last_used = time.time()
         self.sentence = sentence
         self.sample_rate = sample_rate
         self.filler_audio = filler_audio
         self.teacher_id = teacher_id
         self.student_id = student_id
-        self.results: Dict[str, Any] = {
+
+        self.phon_q = queue.Queue()
+        self.asr_q = queue.Queue()
+        self.azure_pron_q = None
+        self.azure_plain_q = None
+
+        self.results = {
             "session_id": self.id,
             "reference_text": sentence,
             "reference_phonemes": analysis_pipeline._ref_ph_map(sentence),
@@ -61,14 +79,12 @@ class RealtimeSession:
 
         rt = config.REALTIME_FLAGS
 
-        # Queues for Azure engines when using push-stream instead of the
-        # default microphone.
         if config.AZURE_PUSH_STREAM and rt.get("azure_pron", True):
             self.azure_pron_q = queue.Queue()
         if config.AZURE_PUSH_STREAM and rt.get("azure_plain", True):
             self.azure_plain_q = queue.Queue()
 
-        # Start wav2vec2 engines
+        # Wav2Vec2 engines
         self.phon_thread = Wav2Vec2PhonemeExtractor(
             sample_rate=self.sample_rate,
             chunk_duration=config.CHUNK_DURATION,
@@ -107,6 +123,29 @@ class RealtimeSession:
             self.azure_pron.start()
         if self.azure_plain.realtime:
             self.azure_plain.start()
+
+    @property
+    def idle_seconds(self) -> float:
+        return time.time() - self.last_used
+
+    def shutdown(self) -> None:
+        """Attempt to cleanly stop all running engines."""
+        try:
+            self.phon_thread.stop()
+        except Exception:
+            pass
+        try:
+            self.asr_thread.stop()
+        except Exception:
+            pass
+        try:
+            self.azure_pron.stop()
+        except Exception:
+            pass
+        try:
+            self.azure_plain.stop()
+        except Exception:
+            pass
 
     def add_chunk(self, pcm_data: bytes):
         """Add a chunk of 16‑bit mono PCM data."""
@@ -165,6 +204,7 @@ class RealtimeSession:
 
         console.log(f"wrote {self.chunk_count} chunks totalling {os.path.getsize(self.wav_path)} bytes")
         self.results["end_time"] = time.time()
+        self.last_used = self.results["end_time"]
         req, messages = prompt_builder.build(self.results, state={})
         console.rule("[bold green]System Prompt[/bold green]")
         console.print(messages[0]["content"])

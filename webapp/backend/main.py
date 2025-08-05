@@ -11,6 +11,7 @@ import sqlite3
 import asyncio
 
 from . import config, storage
+from .session_manager import EnginePool
 
 # Heavy dependencies such as the analysis pipeline, text to speech and
 # realtime processing pull in a number of third party libraries.  Importing
@@ -28,6 +29,7 @@ import gpt_client
 # class itself is imported lazily in `realtime_start` to avoid importing heavy
 # dependencies when they are not installed.
 sessions: dict[str, object] = {}
+engine_pool = EnginePool()
 
 app = FastAPI()
 storage.init_db()
@@ -144,6 +146,24 @@ async def initialize_models():
     _load_phoneme_model("cpu")
     models_ready = True
     return {"status": "ok"}
+
+
+@app.on_event("startup")
+async def _warm_models() -> None:
+    """Pre-load heavy model weights so the first request is fast."""
+    try:
+        from FASE2_wav2vec2_process import _load_asr_model, _load_phoneme_model
+        _load_asr_model("cpu")
+        _load_phoneme_model("cpu")
+    except Exception:
+        pass
+    try:
+        from FASE2_azure_process import AzurePronunciationEvaluator, AzurePlainTranscriber
+        # Instantiate once to trigger lazy loading of Azure SDK components
+        AzurePronunciationEvaluator("", realtime=False)
+        AzurePlainTranscriber(realtime=False)
+    except Exception:
+        pass
 
 
 @app.get("/api/config")
@@ -278,17 +298,16 @@ async def realtime_start(
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
     # Import heavy modules lazily
-    from .realtime import RealtimeSession
     from .tts import tts_to_file
 
     filler_text = f"De zin was {sentence}"
     filler_audio = tts_to_file(filler_text)
-    sess = RealtimeSession(
+    sess = engine_pool.get(
+        teacher_id,
+        student_id,
         sentence,
         sample_rate,
-        filler_audio=filler_audio,
-        teacher_id=teacher_id,
-        student_id=student_id,
+        filler_audio,
     )
     sessions[sess.id] = sess
     return {
