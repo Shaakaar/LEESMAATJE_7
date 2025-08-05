@@ -16,7 +16,8 @@ interface RecorderOptions {
 }
 
 export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas }: RecorderOptions) {
-  const [recording, setRecording] = useState(false);
+  const recordingRef = useRef(false); // for audio-thread guard
+  const [recording, setRecording] = useState(false); // UI only
   const [status, setStatus] = useState('');
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
 
@@ -140,7 +141,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     processor.connect(audioCtx.destination);
     console.log('Setting processor port message handler');
     processor.port.onmessage = (e) => {
-      if (!recording) return;
+      if (!recordingRef.current) return;
       const pcm = e.data as Int16Array;
       recordedChunksRef.current.push(pcm);
       const blob = new Blob([pcm], { type: 'application/octet-stream' });
@@ -156,6 +157,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     recordedChunksRef.current = [];
     if (playbackUrl) URL.revokeObjectURL(playbackUrl);
     setPlaybackUrl(null);
+    recordingRef.current = true;
     setRecording(true);
     setStatus('Opnemen');
     visualize();
@@ -163,6 +165,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
 
   async function stopRecording() {
     console.log('stopRecording called');
+    recordingRef.current = false;
     setRecording(false);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     drawWave(0);
