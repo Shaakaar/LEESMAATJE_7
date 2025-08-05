@@ -14,11 +14,12 @@ export default function StoryPage() {
   const navigate = useNavigate();
   const [storyData, setStoryData] = useState<StoryItem[]>([]);
   const [index, setIndex] = useState(0);
-  const [selectedDir, setSelectedDir] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null!);
   const currentItem = storyData[index] ?? null;
+  const nextItem =
+    currentItem?.type === 'direction' ? (storyData[index + 1] ?? null) : null;
 
   const { recording, status, playbackUrl, startRecording, stopRecording } = useRecorder({
     sentence: currentItem && currentItem.type === 'sentence' ? currentItem.text : '',
@@ -41,34 +42,35 @@ export default function StoryPage() {
     }
   }, [studentId, navigate]);
 
-  useEffect(() => {
-    setSelectedDir(null);
-  }, [index]);
+  function handleDirection(choice: number) {
+    if (!currentItem || currentItem.type !== 'direction') return;
+    const choiceText =
+      choice === 0
+        ? currentItem.text
+        : (storyData[index + 1] as StoryItem).text;
+    const theme = localStorage.getItem('theme');
+    const level = localStorage.getItem('level');
+    const url = `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(choiceText)}`;
+    const ev = new EventSource(url);
+    const newData: StoryItem[] = [];
+    ev.addEventListener('sentence', (e) =>
+      newData.push({ type: 'sentence', ...(JSON.parse((e as MessageEvent).data)) })
+    );
+    ev.addEventListener('direction', (e) =>
+      newData.push({ type: 'direction', ...(JSON.parse((e as MessageEvent).data)) })
+    );
+    ev.addEventListener('complete', () => {
+      ev.close();
+      setStoryData((s) => {
+        const arr = [...s];
+        arr.splice(index, 2, ...newData);
+        return arr;
+      });
+    });
+  }
 
   function next() {
-    if (currentItem && currentItem.type === 'direction') {
-      if (selectedDir === null) return;
-      const choice =
-        selectedDir === 0
-          ? currentItem.text
-          : (storyData[index + 1] as StoryItem).text;
-      const theme = localStorage.getItem('theme');
-      const level = localStorage.getItem('level');
-      const url = `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(choice)}`;
-      const ev = new EventSource(url);
-      const newData: StoryItem[] = [];
-      ev.addEventListener('sentence', (e) => newData.push({ type: 'sentence', ...(JSON.parse((e as MessageEvent).data)) }));
-      ev.addEventListener('direction', (e) => newData.push({ type: 'direction', ...(JSON.parse((e as MessageEvent).data)) }));
-      ev.addEventListener('complete', () => {
-        ev.close();
-        setStoryData((s) => {
-          const arr = [...s];
-          arr.splice(index, 2, ...newData);
-          return arr;
-        });
-      });
-      return;
-    }
+    if (currentItem && currentItem.type === 'direction') return;
     setIndex((i) => Math.min(i + 1, storyData.length - 1));
   }
 
@@ -97,26 +99,40 @@ export default function StoryPage() {
       <div className="bg-white p-6 mx-auto max-w-xl rounded-xl shadow space-y-4 w-full">
         <label className="font-semibold block text-left" htmlFor="sent">Zin om te lezen:</label>
         <div id="sent" className="bg-white text-[2rem] p-4 rounded-xl shadow text-center">
-          <SentenceDisplay item={currentItem} selectedDirection={selectedDir} setSelectedDirection={setSelectedDir} />
+          <SentenceDisplay
+            item={currentItem}
+            nextItem={nextItem}
+            onDirectionSelect={handleDirection}
+          />
         </div>
         <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
           <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
         </div>
         <div className="font-bold">{index + 1}/{storyData.length}</div>
-        <RecordControls
-          onRecord={startRecording}
-          onStop={stopRecording}
-          recording={recording}
-          playbackUrl={playbackUrl}
-          onPlayback={playRecorded}
-          status={status}
-          canvasRef={canvasRef}
-        />
+        {currentItem?.type === 'sentence' && (
+          <RecordControls
+            onRecord={startRecording}
+            onStop={stopRecording}
+            recording={recording}
+            playbackUrl={playbackUrl}
+            onPlayback={playRecorded}
+            status={status}
+            canvasRef={canvasRef}
+          />
+        )}
         <div className="flex justify-between mt-4">
-          <button onClick={prev} disabled={index === 0} className="flex items-center gap-1 px-4 py-2 rounded-full bg-primary text-white font-semibold disabled:opacity-50">
+          <button
+            onClick={prev}
+            disabled={index === 0}
+            className="flex items-center gap-1 px-4 py-2 rounded-full bg-primary text-white font-semibold disabled:opacity-50"
+          >
             <i className="lucide lucide-chevrons-left" /> Vorige
           </button>
-          <button onClick={next} disabled={index === storyData.length - 1} className="flex items-center gap-1 px-4 py-2 rounded-full bg-primary text-white font-semibold disabled:opacity-50">
+          <button
+            onClick={next}
+            disabled={index === storyData.length - 1 || currentItem?.type === 'direction'}
+            className="flex items-center gap-1 px-4 py-2 rounded-full bg-primary text-white font-semibold disabled:opacity-50"
+          >
             Volgende <i className="lucide lucide-chevrons-right" />
           </button>
         </div>
