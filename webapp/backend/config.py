@@ -40,6 +40,10 @@ VOICE_INSTRUCTIONS = (
     "Maak korte pauzes tussen de woorden en leg nadruk op fout verbeteringen."
 )
 
+# Separate model for word-level TTS generation
+WORD_VOICE_MODEL = "tts-1"
+WORD_VOICE_LANGUAGE = "nl"
+
 # Delay before playing filler sentence after stop (seconds)
 DELAY_SECONDS = 0.5
 
