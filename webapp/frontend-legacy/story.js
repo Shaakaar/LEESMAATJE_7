@@ -4,7 +4,7 @@ let stream;
 let recording = false;
 let sentence = "";
 let sessionId = null;
-let fillerAudio = null;
+const FILLER_AUDIO = 'de_zin_was.wav';
 let delaySeconds = 0;
 let teacherId = null;
 let studentId = null;
@@ -199,7 +199,6 @@ async function startRecording(){
         throw new Error(j.detail);
       }
       sessionId = j.session_id;
-      fillerAudio = j.filler_audio;
       delaySeconds = j.delay_seconds;
       for(const blob of pendingChunks){
         const f = new FormData();
@@ -290,7 +289,7 @@ async function stopRecording(){
   sessionId = null;
   setTimeout(async () => {
     statusEl.innerHTML = '<span class="spinner"></span>Feedback afspelen';
-    playAudio('/api/audio/' + fillerAudio, async () => {
+    playAudio('/api/audio/' + FILLER_AUDIO, async () => {
       let data;
       try {
         data = await stopPromise;

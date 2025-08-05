@@ -34,6 +34,10 @@ engine_pool = EnginePool()
 app = FastAPI()
 storage.init_db()
 
+# Pre-generated filler audio clip used between recordings
+FILLER_AUDIO_BASENAME = "de_zin_was.wav"
+FILLER_AUDIO_PATH = storage.STORAGE_DIR / FILLER_AUDIO_BASENAME
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -165,6 +169,15 @@ async def _warm_models() -> None:
     except Exception:
         pass
 
+    # Generate the fixed filler sentence once so it's ready for reuse
+    try:
+        from .tts import tts_to_file
+        if not FILLER_AUDIO_PATH.exists():
+            tmp = tts_to_file("De zin was")
+            shutil.move(tmp, FILLER_AUDIO_PATH)
+    except Exception:
+        pass
+
 
 @app.get("/api/config")
 async def get_config():
@@ -242,9 +255,6 @@ async def process(
     results = analyze_audio(wav_bytes, sentence)
     req, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
-
-    filler_text = f"De zin was {sentence}"
-    filler_audio = tts_to_file(filler_text)
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
 
     results["correct"] = tutor_resp.is_correct
@@ -262,7 +272,6 @@ async def process(
     return JSONResponse(
         {
             "feedback_text": tutor_resp.feedback_text,
-            "filler_audio": os.path.basename(filler_audio),
             "feedback_audio": os.path.basename(feedback_audio),
             "correct": tutor_resp.is_correct,
             "errors": [e.model_dump(by_alias=True) for e in tutor_resp.errors],
@@ -297,24 +306,18 @@ async def realtime_start(
 ):
     if not models_ready:
         raise HTTPException(status_code=400, detail="Models not initialized")
-    # Import heavy modules lazily
-    from .tts import tts_to_file
-
-    filler_text = f"De zin was {sentence}"
-    filler_audio = tts_to_file(filler_text)
     sess, old_id = engine_pool.get(
         teacher_id,
         student_id,
         sentence,
         sample_rate,
-        filler_audio,
+        str(FILLER_AUDIO_PATH),
     )
     if old_id:
         sessions.pop(old_id, None)
     sessions[sess.id] = sess
     return {
         "session_id": sess.id,
-        "filler_audio": os.path.basename(filler_audio),
         "delay_seconds": config.DELAY_SECONDS,
     }
 
@@ -355,9 +358,6 @@ async def realtime_stop(sid: str):
     return JSONResponse(
         {
             "feedback_text": tutor_resp.feedback_text,
-            "filler_audio": (
-                os.path.basename(sess.filler_audio) if sess.filler_audio else None
-            ),
             "feedback_audio": os.path.basename(feedback_audio),
             "correct": tutor_resp.is_correct,
             "errors": [e.model_dump(by_alias=True) for e in tutor_resp.errors],

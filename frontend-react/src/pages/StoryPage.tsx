@@ -24,6 +24,8 @@ export default function StoryPage() {
 
   const { recording, status, playbackUrl, startRecording, stopRecording } = useRecorder({
     sentence: currentItem && currentItem.type === 'sentence' ? currentItem.text : '',
+    sentenceAudio:
+      currentItem && currentItem.type === 'sentence' ? currentItem.audio : undefined,
     teacherId: Number(teacherId) || 0,
     studentId: studentId ?? '',
     onFeedback: (d) => setFeedback(d),
