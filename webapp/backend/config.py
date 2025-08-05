@@ -43,7 +43,12 @@ VOICE_INSTRUCTIONS = (
 # Delay before playing filler sentence after stop (seconds)
 DELAY_SECONDS = 0.5
 
-# Analysis settings
+# Overall pipeline mode: when ``False`` the backend expects a single WAV file
+# instead of realtime chunks.
+REALTIME = os.getenv("REALTIME", "true").lower() not in {"0", "false", "no"}
+
+# Analysis settings for the individual engines.  These flags are independent of
+# ``REALTIME`` and control which recognisers run in either mode.
 REALTIME_FLAGS = {
     "azure_pron": True,
     "azure_plain": True,
@@ -54,8 +59,8 @@ REALTIME_FLAGS = {
 PARALLEL_OFFLINE = True
 CHUNK_DURATION = 10
 
-# Stream audio to Azure instead of using a separate microphone.
-# Applies to both RecorderPipeline and RealtimeSession.
+# Stream audio to Azure instead of using a separate microphone.  Applies to both
+# RecorderPipeline and RealtimeSession.
 AZURE_PUSH_STREAM = True
 
 # GPT model settings
