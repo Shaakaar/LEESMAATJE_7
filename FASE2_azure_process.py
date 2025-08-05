@@ -212,7 +212,10 @@ class AzurePronunciationEvaluator:
                 border_style="green"
             )
         )
-        if self._feed_thread is not None:
+        if self.audio_queue is not None:
+            # ``_feed_thread`` can only be started once; create a fresh thread
+            # for every new recording session.
+            self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
         self.recognizer.start_continuous_recognition()
 
@@ -224,6 +227,9 @@ class AzurePronunciationEvaluator:
         self.recognizer.stop_continuous_recognition()
         if self._feed_thread is not None:
             self._feed_thread.join()
+            # ``threading.Thread`` instances cannot be reused, so clear the
+            # reference to allow ``start`` to spawn a new one next time.
+            self._feed_thread = None
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Pron stopped.[/red]\n")
 
@@ -391,7 +397,10 @@ class AzurePlainTranscriber:
             return
         self._running = True
         console.print(Panel.fit("▶ [bold blue]Azure PlainTranscriber listening…[/bold blue]", border_style="blue"))
-        if self._feed_thread is not None:
+        if self.audio_queue is not None:
+            # Spawn a fresh feed thread for each session; previously used thread
+            # objects cannot be restarted.
+            self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
         self.recognizer.start_continuous_recognition()
 
@@ -403,6 +412,8 @@ class AzurePlainTranscriber:
         self.recognizer.stop_continuous_recognition()
         if self._feed_thread is not None:
             self._feed_thread.join()
+            # Allow ``start`` to create a new thread on the next run.
+            self._feed_thread = None
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Plain stopped.[/red]\n")
 
