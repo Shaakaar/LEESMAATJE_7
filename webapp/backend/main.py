@@ -8,6 +8,7 @@ import os
 import tempfile
 import shutil
 import sqlite3
+import asyncio
 
 from . import config, storage
 
@@ -366,14 +367,29 @@ async def start_story(theme: str, level: str):
     if not story:
         raise HTTPException(status_code=400, detail="Story not found")
 
-    from .tts import tts_to_file
+    from .tts import tts_to_file, word_tts_to_file
 
     async def event_stream():
         total = len(story["section1"]) + len(story["directions"])
         done = 0
+
+        sentence_tasks = []
         for sent in story["section1"]:
-            audio = tts_to_file(sent)
-            word_audios = [os.path.basename(tts_to_file(w)) for w in sent.split()]
+            audio_task = asyncio.create_task(asyncio.to_thread(tts_to_file, sent))
+            word_tasks = [
+                asyncio.create_task(asyncio.to_thread(word_tts_to_file, w))
+                for w in sent.split()
+            ]
+            sentence_tasks.append((sent, audio_task, word_tasks))
+
+        direction_tasks = [
+            (d, asyncio.create_task(asyncio.to_thread(tts_to_file, d)))
+            for d in story["directions"]
+        ]
+
+        for sent, audio_task, word_tasks in sentence_tasks:
+            audio = await audio_task
+            word_audios = [os.path.basename(await t) for t in word_tasks]
             yield {
                 "event": "sentence",
                 "data": json.dumps(
@@ -387,8 +403,9 @@ async def start_story(theme: str, level: str):
             }
             done += 1
             yield {"event": "progress", "data": str(done / total)}
-        for direc in story["directions"]:
-            audio = tts_to_file(direc)
+
+        for direc, audio_task in direction_tasks:
+            audio = await audio_task
             yield {
                 "event": "direction",
                 "data": json.dumps(
@@ -401,6 +418,7 @@ async def start_story(theme: str, level: str):
             }
             done += 1
             yield {"event": "progress", "data": str(done / total)}
+
         yield {"event": "complete", "data": "ok"}
 
     return EventSourceResponse(event_stream())
@@ -448,14 +466,29 @@ async def continue_story(theme: str, level: str, direction: str, mistakes: str |
         sentences = []
         directions = []
 
-    from .tts import tts_to_file
+    from .tts import tts_to_file, word_tts_to_file
 
     async def event_stream():
         total = len(sentences) + len(directions)
         done = 0
+
+        sentence_tasks = []
         for sent in sentences:
-            audio = tts_to_file(sent)
-            word_audios = [os.path.basename(tts_to_file(w)) for w in sent.split()]
+            audio_task = asyncio.create_task(asyncio.to_thread(tts_to_file, sent))
+            word_tasks = [
+                asyncio.create_task(asyncio.to_thread(word_tts_to_file, w))
+                for w in sent.split()
+            ]
+            sentence_tasks.append((sent, audio_task, word_tasks))
+
+        direction_tasks = [
+            (d, asyncio.create_task(asyncio.to_thread(tts_to_file, d)))
+            for d in directions
+        ]
+
+        for sent, audio_task, word_tasks in sentence_tasks:
+            audio = await audio_task
+            word_audios = [os.path.basename(await t) for t in word_tasks]
             yield {
                 "event": "sentence",
                 "data": json.dumps({
@@ -467,8 +500,9 @@ async def continue_story(theme: str, level: str, direction: str, mistakes: str |
             }
             done += 1
             yield {"event": "progress", "data": str(done / total)}
-        for direc in directions:
-            audio = tts_to_file(direc)
+
+        for direc, audio_task in direction_tasks:
+            audio = await audio_task
             yield {
                 "event": "direction",
                 "data": json.dumps({
@@ -479,6 +513,7 @@ async def continue_story(theme: str, level: str, direction: str, mistakes: str |
             }
             done += 1
             yield {"event": "progress", "data": str(done / total)}
+
         yield {"event": "complete", "data": "ok"}
 
     return EventSourceResponse(event_stream())
