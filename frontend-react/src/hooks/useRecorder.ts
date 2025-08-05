@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const SEND_INTERVAL_MS = 100; // how often to upload audio (in ms)
 const DEBUG = false; // set true to enable chunk logs
@@ -38,8 +38,20 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   const startPromiseRef = useRef<Promise<void> | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const rafRef = useRef<number | null>(null);
+  const realtimeRef = useRef(true);
+
+  // Fetch runtime config (realtime flag) once
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((cfg) => {
+        realtimeRef.current = !!cfg.realtime;
+      })
+      .catch(() => {});
+  }, []);
 
   function sendChunk(blob: Blob) {
+    if (!realtimeRef.current || !sessionIdRef.current) return;
     const form = new FormData();
     form.append('file', blob, 'chunk.pcm');
     fetch(`/api/realtime/chunk/${sessionIdRef.current}`, { method: 'POST', body: form });
@@ -91,31 +103,36 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     streamRef.current = stream;
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
+    if (realtimeRef.current) {
+      const fd = new FormData();
+      fd.append('sentence', sentence);
+      fd.append('sample_rate', String(audioCtx.sampleRate));
+      fd.append('teacher_id', String(teacherId));
+      fd.append('student_id', studentId);
 
-    const fd = new FormData();
-    fd.append('sentence', sentence);
-    fd.append('sample_rate', String(audioCtx.sampleRate));
-    fd.append('teacher_id', String(teacherId));
-    fd.append('student_id', studentId);
-
-    pendingChunksRef.current = [];
-    startPromiseRef.current = fetch('/api/realtime/start', { method: 'POST', body: fd })
-      .then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.detail);
-        sessionIdRef.current = j.session_id;
-        fillerAudioRef.current = j.filler_audio;
-        delayRef.current = j.delay_seconds;
-        for (const blob of pendingChunksRef.current) sendChunk(blob);
-        pendingChunksRef.current = [];
-      })
-      .catch((err) => {
-        setStatus('Fout: ' + err.message);
-        setRecording(false);
-      })
-      .finally(() => {
-        startPromiseRef.current = null;
-      });
+      pendingChunksRef.current = [];
+      startPromiseRef.current = fetch('/api/realtime/start', { method: 'POST', body: fd })
+        .then(async (r) => {
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.detail);
+          sessionIdRef.current = j.session_id;
+          fillerAudioRef.current = j.filler_audio;
+          delayRef.current = j.delay_seconds;
+          for (const blob of pendingChunksRef.current) sendChunk(blob);
+          pendingChunksRef.current = [];
+        })
+        .catch((err) => {
+          setStatus('Fout: ' + err.message);
+          setRecording(false);
+        })
+        .finally(() => {
+          startPromiseRef.current = null;
+        });
+    } else {
+      sessionIdRef.current = null;
+      fillerAudioRef.current = null;
+      delayRef.current = 0;
+    }
 
     const source = audioCtx.createMediaStreamSource(stream);
     const analyser = audioCtx.createAnalyser();
@@ -144,6 +161,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
       if (!recordingRef.current) return;
       const pcm = e.data as Int16Array;
       recordedChunksRef.current.push(pcm);
+      if (!realtimeRef.current) return;
       PCM_QUEUE.push(pcm);
       const now = performance.now();
       if (now - lastSend < SEND_INTERVAL_MS) return;
@@ -182,57 +200,103 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     processorRef.current?.disconnect();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     setStatus('Analyseren');
-
-    if (startPromiseRef.current) {
-      try {
-        await startPromiseRef.current;
-      } catch {
-        return;
+    if (realtimeRef.current) {
+      if (startPromiseRef.current) {
+        try {
+          await startPromiseRef.current;
+        } catch {
+          return;
+        }
       }
+      if (PCM_QUEUE.length) {
+        const total = PCM_QUEUE.reduce((n, c) => n + c.length, 0);
+        const flat = new Int16Array(total);
+        let pos = 0;
+        for (const c of PCM_QUEUE) { flat.set(c, pos); pos += c.length; }
+        PCM_QUEUE.length = 0;
+        sendChunk(new Blob([flat], { type: 'application/octet-stream' }));
+      }
+      const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, { method: 'POST' }).then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail);
+        return j as FeedbackData;
+      });
+      sessionIdRef.current = null;
+      setTimeout(async () => {
+        setStatus('Feedback afspelen');
+        const filler = fillerAudioRef.current;
+        if (filler) await new Promise((res) => {
+          const a = new Audio('/api/audio/' + filler);
+          a.onended = res;
+          a.play();
+        });
+        let data: FeedbackData;
+        try {
+          data = await stopPromise;
+        } catch (err) {
+          setStatus('Fout: ' + (err as Error).message);
+          return;
+        }
+        const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
+        const flat = new Int16Array(total);
+        let pos = 0;
+        for (const c of recordedChunksRef.current) {
+          flat.set(c, pos);
+          pos += c.length;
+        }
+        const wav = encodeWav(flat, audioCtxRef.current!.sampleRate);
+        console.log('final wav blob', wav.size, 'bytes');
+        const url = URL.createObjectURL(wav);
+        setPlaybackUrl(url);
+        onFeedback(data);
+        setStatus('');
+      }, delayRef.current * 1000);
+      return;
     }
-    if (PCM_QUEUE.length) {
-      const total = PCM_QUEUE.reduce((n, c) => n + c.length, 0);
-      const flat = new Int16Array(total);
-      let pos = 0;
-      for (const c of PCM_QUEUE) { flat.set(c, pos); pos += c.length; }
-      PCM_QUEUE.length = 0;
-      sendChunk(new Blob([flat], { type: 'application/octet-stream' }));
+
+    // Offline mode: process the full recording in one request
+    const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
+    const flat = new Int16Array(total);
+    let pos = 0;
+    for (const c of recordedChunksRef.current) {
+      flat.set(c, pos);
+      pos += c.length;
     }
-    const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, { method: 'POST' }).then(async (r) => {
+    const wav = encodeWav(flat, audioCtxRef.current!.sampleRate);
+    const fd = new FormData();
+    fd.append('file', wav, 'audio.wav');
+    fd.append('sentence', sentence);
+    fd.append('teacher_id', String(teacherId));
+    fd.append('student_id', studentId);
+    let data: FeedbackData & { filler_audio: string; delay_seconds: number };
+    try {
+      const r = await fetch('/api/process', { method: 'POST', body: fd });
       const j = await r.json();
       if (!r.ok) throw new Error(j.detail);
-      return j as FeedbackData;
-    });
-    sessionIdRef.current = null;
+      data = j;
+    } catch (err) {
+      setStatus('Fout: ' + (err as Error).message);
+      return;
+    }
+    const url = URL.createObjectURL(wav);
+    setPlaybackUrl(url);
     setTimeout(async () => {
       setStatus('Feedback afspelen');
-      const filler = fillerAudioRef.current;
-      if (filler) await new Promise((res) => {
-        const a = new Audio('/api/audio/' + filler);
-        a.onended = res;
-        a.play();
+      if (data.filler_audio) {
+        await new Promise((res) => {
+          const a = new Audio('/api/audio/' + data.filler_audio);
+          a.onended = res;
+          a.play();
+        });
+      }
+      const fb = new Audio('/api/audio/' + data.feedback_audio);
+      await new Promise((res) => {
+        fb.onended = res;
+        fb.play();
       });
-      let data: FeedbackData;
-      try {
-        data = await stopPromise;
-      } catch (err) {
-        setStatus('Fout: ' + (err as Error).message);
-        return;
-      }
-      const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
-      const flat = new Int16Array(total);
-      let pos = 0;
-      for (const c of recordedChunksRef.current) {
-        flat.set(c, pos);
-        pos += c.length;
-      }
-      const wav = encodeWav(flat, audioCtxRef.current!.sampleRate);
-      console.log('final wav blob', wav.size, 'bytes');
-      const url = URL.createObjectURL(wav);
-      setPlaybackUrl(url);
       onFeedback(data);
       setStatus('');
-    }, delayRef.current * 1000);
+    }, (data.delay_seconds ?? 0) * 1000);
   }
 
   return {

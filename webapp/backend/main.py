@@ -145,6 +145,12 @@ async def initialize_models():
     return {"status": "ok"}
 
 
+@app.get("/api/config")
+async def get_config():
+    """Expose minimal runtime configuration to the frontend."""
+    return {"realtime": config.REALTIME, "delay_seconds": config.DELAY_SECONDS}
+
+
 @app.get("/api/next_sentence")
 async def next_sentence():
     global sent_index
