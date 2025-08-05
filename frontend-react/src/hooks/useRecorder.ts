@@ -58,7 +58,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   }
 
   function visualize() {
-    if (!recording) return;
+    if (!recordingRef.current) return;   // keep waveform inactive only when not recording
     const analyser = analyserRef.current;
     const dataArray = dataArrayRef.current;
     if (!analyser || !dataArray) return;
