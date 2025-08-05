@@ -190,16 +190,13 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
         return;
       }
     }
-    if (PCM_QUEUE.length && sessionIdRef.current) {
+    if (PCM_QUEUE.length) {
       const total = PCM_QUEUE.reduce((n, c) => n + c.length, 0);
       const flat = new Int16Array(total);
       let pos = 0;
       for (const c of PCM_QUEUE) { flat.set(c, pos); pos += c.length; }
       PCM_QUEUE.length = 0;
-      const blob = new Blob([flat], { type: 'application/octet-stream' });
-      const form = new FormData();
-      form.append('file', blob, 'chunk.pcm');
-      await fetch(`/api/realtime/chunk/${sessionIdRef.current}`, { method: 'POST', body: form });
+      sendChunk(new Blob([flat], { type: 'application/octet-stream' }));
     }
     const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, { method: 'POST' }).then(async (r) => {
       const j = await r.json();
