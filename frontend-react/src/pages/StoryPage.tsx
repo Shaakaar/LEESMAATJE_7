@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { useAuthStore } from '@/lib/useAuthStore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useRecorder } from '@/hooks/useRecorder';
 import type { FeedbackData } from '@/hooks/useRecorder';
 import { SentenceDisplay } from '@/components/story/SentenceDisplay';
@@ -12,6 +12,7 @@ import { RecordControls } from '@/components/story/RecordControls';
 export default function StoryPage() {
   const { studentId, teacherId } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [storyData, setStoryData] = useState<StoryItem[]>([]);
   const [index, setIndex] = useState(0);
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
@@ -37,6 +38,11 @@ export default function StoryPage() {
     }
     try {
       setStoryData(JSON.parse(data));
+      const idx = Number(localStorage.getItem('story_index'));
+      if (!Number.isNaN(idx)) {
+        setIndex(idx);
+        localStorage.removeItem('story_index');
+      }
     } catch {
       navigate('/');
     }
@@ -48,25 +54,9 @@ export default function StoryPage() {
       choice === 0
         ? currentItem.text
         : (storyData[index + 1] as StoryItem).text;
-    const theme = localStorage.getItem('theme');
-    const level = localStorage.getItem('level');
-    const url = `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(choiceText)}`;
-    const ev = new EventSource(url);
-    const newData: StoryItem[] = [];
-    ev.addEventListener('sentence', (e) =>
-      newData.push({ type: 'sentence', ...(JSON.parse((e as MessageEvent).data)) })
-    );
-    ev.addEventListener('direction', (e) =>
-      newData.push({ type: 'direction', ...(JSON.parse((e as MessageEvent).data)) })
-    );
-    ev.addEventListener('complete', () => {
-      ev.close();
-      setStoryData((s) => {
-        const arr = [...s];
-        arr.splice(index, 2, ...newData);
-        return arr;
-      });
-    });
+    localStorage.setItem('direction_choice', choiceText);
+    localStorage.setItem('direction_index', String(index));
+    navigate(`/continue${location.search}`);
   }
 
   function next() {
