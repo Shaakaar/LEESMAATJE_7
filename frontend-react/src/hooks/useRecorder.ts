@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 
+const DEBUG = false;
+
 export interface FeedbackData {
   feedback_text: string;
   feedback_audio: string;
@@ -35,7 +37,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   const rafRef = useRef<number | null>(null);
 
   function sendChunk(blob: Blob) {
-    console.log('uploading chunk', blob.size, 'bytes');
+    if (DEBUG) console.log('chunk', blob.size);
     const form = new FormData();
     form.append('file', blob, 'chunk.pcm');
     fetch(`/api/realtime/chunk/${sessionIdRef.current}`, { method: 'POST', body: form });
@@ -76,7 +78,6 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   async function startRecording() {
     console.log('startRecording');
     if (!sentence) return;
-    console.log('startRecording called');
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -145,7 +146,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
       const pcm = e.data as Int16Array;
       recordedChunksRef.current.push(pcm);
       const blob = new Blob([pcm], { type: 'application/octet-stream' });
-      console.log('created chunk', blob.size, 'bytes');
+      if (DEBUG) console.log('chunk', blob.size);
       if (sessionIdRef.current) {
         sendChunk(blob);
       } else {
