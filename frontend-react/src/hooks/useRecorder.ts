@@ -27,6 +27,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const sampleRateRef = useRef<number>(0);
   const processorRef = useRef<AudioWorkletNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -103,6 +104,8 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     streamRef.current = stream;
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
+    sampleRateRef.current = audioCtx.sampleRate;
+    lastSend = 0;
     if (realtimeRef.current) {
       const fd = new FormData();
       fd.append('sentence', sentence);
@@ -199,6 +202,9 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
     drawWave(0);
     processorRef.current?.disconnect();
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    const sampleRate = sampleRateRef.current || 48000;
+    await audioCtxRef.current?.close();
+    audioCtxRef.current = null;
     setStatus('Analyseren');
     if (realtimeRef.current) {
       if (startPromiseRef.current) {
@@ -244,7 +250,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
           flat.set(c, pos);
           pos += c.length;
         }
-        const wav = encodeWav(flat, audioCtxRef.current!.sampleRate);
+        const wav = encodeWav(flat, sampleRate);
         console.log('final wav blob', wav.size, 'bytes');
         const url = URL.createObjectURL(wav);
         setPlaybackUrl(url);
@@ -262,7 +268,7 @@ export function useRecorder({ sentence, teacherId, studentId, onFeedback, canvas
       flat.set(c, pos);
       pos += c.length;
     }
-    const wav = encodeWav(flat, audioCtxRef.current!.sampleRate);
+    const wav = encodeWav(flat, sampleRate);
     const fd = new FormData();
     fd.append('file', wav, 'audio.wav');
     fd.append('sentence', sentence);
