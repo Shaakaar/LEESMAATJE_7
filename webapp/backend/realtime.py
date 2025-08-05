@@ -70,6 +70,8 @@ class RealtimeSession:
         self.teacher_id = teacher_id
         self.student_id = student_id
 
+        first_run = not hasattr(self, "phon_thread")
+
         self.phon_q = queue.Queue()
         self.asr_q = queue.Queue()
         self.azure_pron_q = None
@@ -108,40 +110,63 @@ class RealtimeSession:
         if config.AZURE_PUSH_STREAM and rt.get("azure_plain", True):
             self.azure_plain_q = queue.Queue()
 
-        # Wav2Vec2 engines
-        self.phon_thread = Wav2Vec2PhonemeExtractor(
-            sample_rate=self.sample_rate,
-            chunk_duration=config.CHUNK_DURATION,
-            results=self.results,
-            realtime=rt.get("w2v2_phonemes", True),
-            audio_queue=self.phon_q,
-        )
-        self.asr_thread = Wav2Vec2Transcriber(
-            sample_rate=self.sample_rate,
-            chunk_duration=config.CHUNK_DURATION,
-            results=self.results,
-            realtime=rt.get("w2v2_asr", True),
-            audio_queue=self.asr_q,
-        )
+        if first_run or not getattr(self, "phon_thread", None) or not self.phon_thread.is_alive():
+            self.phon_thread = Wav2Vec2PhonemeExtractor(
+                sample_rate=self.sample_rate,
+                chunk_duration=config.CHUNK_DURATION,
+                results=self.results,
+                realtime=rt.get("w2v2_phonemes", True),
+                audio_queue=self.phon_q,
+            )
+        else:
+            self.phon_thread.audio_q = self.phon_q
+            self.phon_thread.results = self.results
+            self.phon_thread.buffer = np.zeros((0,), dtype=np.int16)
+            self.phon_thread.running = True
 
-        # Azure engines
-        self.azure_pron = AzurePronunciationEvaluator(
-            self.sentence,
-            results=self.results,
-            realtime=rt.get("azure_pron", True),
-            audio_queue=self.azure_pron_q,
-            sample_rate=self.sample_rate,
-        )
-        self.azure_plain = AzurePlainTranscriber(
-            results=self.results,
-            realtime=rt.get("azure_plain", True),
-            audio_queue=self.azure_plain_q,
-            sample_rate=self.sample_rate,
-        )
+        if first_run or not getattr(self, "asr_thread", None) or not self.asr_thread.is_alive():
+            self.asr_thread = Wav2Vec2Transcriber(
+                sample_rate=self.sample_rate,
+                chunk_duration=config.CHUNK_DURATION,
+                results=self.results,
+                realtime=rt.get("w2v2_asr", True),
+                audio_queue=self.asr_q,
+            )
+        else:
+            self.asr_thread.audio_q = self.asr_q
+            self.asr_thread.results = self.results
+            self.asr_thread.buffer = np.zeros((0,), dtype=np.int16)
+            self.asr_thread.running = True
 
-        if self.phon_thread.realtime:
+        # Azure engines – the recognizers are lightweight but can be reused by
+        # simply updating their queues/results.  Recreate only when missing.
+        if first_run or getattr(self, "azure_pron", None) is None:
+            self.azure_pron = AzurePronunciationEvaluator(
+                self.sentence,
+                results=self.results,
+                realtime=rt.get("azure_pron", True),
+                audio_queue=self.azure_pron_q,
+                sample_rate=self.sample_rate,
+            )
+        else:
+            self.azure_pron.reference_text = self.sentence
+            self.azure_pron.audio_queue = self.azure_pron_q
+            self.azure_pron.results = self.results
+
+        if first_run or getattr(self, "azure_plain", None) is None:
+            self.azure_plain = AzurePlainTranscriber(
+                results=self.results,
+                realtime=rt.get("azure_plain", True),
+                audio_queue=self.azure_plain_q,
+                sample_rate=self.sample_rate,
+            )
+        else:
+            self.azure_plain.audio_queue = self.azure_plain_q
+            self.azure_plain.results = self.results
+
+        if self.phon_thread.realtime and not self.phon_thread.is_alive():
             self.phon_thread.start()
-        if self.asr_thread.realtime:
+        if self.asr_thread.realtime and not self.asr_thread.is_alive():
             self.asr_thread.start()
         if self.azure_pron.realtime:
             self.azure_pron.start()
