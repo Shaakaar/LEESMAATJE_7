@@ -55,7 +55,7 @@ def word_tts_to_file(text: str) -> str:
         voice=config.VOICE_NAME,
         input=text,
         response_format="wav",
-        language=config.WORD_VOICE_LANGUAGE,
+        instructions=config.WORD_VOICE_INSTRUCTIONS,
     )
     with open(path, "wb") as f:
         f.write(resp.content)
