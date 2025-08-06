@@ -53,7 +53,6 @@ class EnginePool:
                 teacher_id=teacher_id,
                 student_id=student_id,
             )
-            sess._init_engines()
         return sess, old_id
 
     def cleanup(self, max_idle: float = 600.0) -> None:
