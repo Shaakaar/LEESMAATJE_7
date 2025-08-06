@@ -249,6 +249,27 @@ class AzurePronunciationEvaluator:
                 pass
             phrase_list.addPhrase(self.reference_text)
 
+    # ------------------------------------------------------------------ reuse
+    def reset_stream(self, audio_queue: queue.Queue, sample_rate: int = 16000):
+        """Swap in a fresh queue and push-stream without recreating recognizer."""
+        if not self.realtime:
+            return
+        self.audio_queue = audio_queue
+        self.sample_rate = sample_rate
+        fmt = speechsdk.audio.AudioStreamFormat(
+            samples_per_second=self.sample_rate,
+            bits_per_sample=16,
+            channels=1,
+        )
+        self._push_stream = speechsdk.audio.PushAudioInputStream(stream_format=fmt)
+        audio_config = speechsdk.audio.AudioConfig(stream=self._push_stream)
+        try:
+            self.recognizer._impl.set_audio_config(audio_config._impl)
+        except Exception:
+            # Fallback in case the private API changes
+            self.recognizer.audio_config = audio_config  # type: ignore[attr-defined]
+        self._feed_thread = None
+
     def process_file(self, wav_path: str):
         """Run pronunciation assessment on a saved WAV."""
         if os.path.getsize(wav_path) == 0:
@@ -447,3 +468,23 @@ class AzurePlainTranscriber:
                 self.results["azure_plain"]["final_transcript"] = f"{prev} {result.text}".strip()
             else:
                 self.results["azure_plain"]["final_transcript"] = result.text
+
+    # ------------------------------------------------------------------ reuse
+    def reset_stream(self, audio_queue: queue.Queue, sample_rate: int = 16000):
+        """Install a new queue and push-stream for the next recording."""
+        if not self.realtime:
+            return
+        self.audio_queue = audio_queue
+        self.sample_rate = sample_rate
+        fmt = speechsdk.audio.AudioStreamFormat(
+            samples_per_second=self.sample_rate,
+            bits_per_sample=16,
+            channels=1,
+        )
+        self._push_stream = speechsdk.audio.PushAudioInputStream(stream_format=fmt)
+        audio_config = speechsdk.audio.AudioConfig(stream=self._push_stream)
+        try:
+            self.recognizer._impl.set_audio_config(audio_config._impl)
+        except Exception:
+            self.recognizer.audio_config = audio_config  # type: ignore[attr-defined]
+        self._feed_thread = None

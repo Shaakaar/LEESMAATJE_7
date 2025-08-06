@@ -8,8 +8,6 @@ import queue
 from typing import Dict, Any
 
 import numpy as np
-
-from FASE2_audio import flush_audio_queue
 from FASE2_wav2vec2_process import Wav2Vec2PhonemeExtractor, Wav2Vec2Transcriber
 from FASE2_azure_process import AzurePronunciationEvaluator, AzurePlainTranscriber
 from rich.console import Console
@@ -44,15 +42,10 @@ class RealtimeSession:
         self.teacher_id = teacher_id
         self.student_id = student_id
 
-        rt = config.REALTIME_FLAGS
         self.phon_q = queue.Queue()
         self.asr_q = queue.Queue()
-        self.azure_pron_q = (
-            queue.Queue() if config.AZURE_PUSH_STREAM and rt.get("azure_pron", True) else None
-        )
-        self.azure_plain_q = (
-            queue.Queue() if config.AZURE_PUSH_STREAM and rt.get("azure_plain", True) else None
-        )
+        self.azure_pron_q = None
+        self.azure_plain_q = None
 
         self.results: Dict[str, Any] = {}
         self.reset(
@@ -83,8 +76,26 @@ class RealtimeSession:
         self.teacher_id = teacher_id
         self.student_id = student_id
 
-        queues = [q for q in (self.phon_q, self.asr_q, self.azure_pron_q, self.azure_plain_q) if q is not None]
-        flush_audio_queue(queues)
+        rt = config.REALTIME_FLAGS
+        self.phon_q = queue.Queue()
+        self.asr_q = queue.Queue()
+        self.azure_pron_q = queue.Queue() if config.AZURE_PUSH_STREAM and rt.get("azure_pron", True) else None
+        self.azure_plain_q = queue.Queue() if config.AZURE_PUSH_STREAM and rt.get("azure_plain", True) else None
+
+        if getattr(self, "phon_thread", None) is not None:
+            self.phon_thread.audio_q = self.phon_q
+            self.phon_thread.buffer = np.zeros((0,), dtype=np.int16)
+        if getattr(self, "asr_thread", None) is not None:
+            self.asr_thread.audio_q = self.asr_q
+            self.asr_thread.buffer = np.zeros((0,), dtype=np.int16)
+        if getattr(self, "azure_pron", None) is not None and self.azure_pron_q is not None:
+            self.azure_pron.reset_stream(self.azure_pron_q, self.sample_rate)
+            if self.azure_pron.realtime:
+                self.azure_pron.start()
+        if getattr(self, "azure_plain", None) is not None and self.azure_plain_q is not None:
+            self.azure_plain.reset_stream(self.azure_plain_q, self.sample_rate)
+            if self.azure_plain.realtime:
+                self.azure_plain.start()
 
         self.results.clear()
         self.results.update(
@@ -220,20 +231,12 @@ class RealtimeSession:
         if self.azure_plain_q is not None:
             self.azure_plain_q.put(None)
         self.wavefile.close()
-        if self.phon_thread.realtime:
-            # Allow the thread to drain remaining audio from the queue.
-            # A sentinel has already been enqueued, so simply join instead
-            # of calling ``stop()``; forcing ``stop()`` here can interrupt
-            # processing and yield empty results.
-            self.phon_thread.join()
-        else:
+        while not self.phon_q.empty() or not self.asr_q.empty():
+            time.sleep(0.05)
+        if not self.phon_thread.realtime:
             self.phon_thread.process_file(self.wav_path)
 
-        if self.asr_thread.realtime:
-            # Same reasoning as above – joining lets the transcriber finish
-            # processing any buffered audio before exiting.
-            self.asr_thread.join()
-        else:
+        if not self.asr_thread.realtime:
             self.asr_thread.process_file(self.wav_path)
 
         if self.azure_pron.realtime:
@@ -245,9 +248,6 @@ class RealtimeSession:
             self.azure_plain.stop()
         else:
             self.azure_plain.process_file(self.wav_path)
-
-        queues = [q for q in (self.phon_q, self.asr_q, self.azure_pron_q, self.azure_plain_q) if q is not None]
-        flush_audio_queue(queues)
 
         console.log(f"wrote {self.chunk_count} chunks totalling {os.path.getsize(self.wav_path)} bytes")
         self.results["end_time"] = time.time()
