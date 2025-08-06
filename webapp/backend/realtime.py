@@ -37,10 +37,24 @@ class RealtimeSession:
         teacher_id: int = 0,
         student_id: int = 0,
     ):
-        # ``reset`` generates a fresh ``session_id`` for every recording so that
-        # results can be stored without clashing primary keys.  ``__init__``
-        # simply delegates to ``reset`` for the initial setup.
         self.last_used = time.time()
+        self.sample_rate = sample_rate
+        self.sentence = sentence
+        self.filler_audio = filler_audio
+        self.teacher_id = teacher_id
+        self.student_id = student_id
+
+        rt = config.REALTIME_FLAGS
+        self.phon_q = queue.Queue()
+        self.asr_q = queue.Queue()
+        self.azure_pron_q = (
+            queue.Queue() if config.AZURE_PUSH_STREAM and rt.get("azure_pron", True) else None
+        )
+        self.azure_plain_q = (
+            queue.Queue() if config.AZURE_PUSH_STREAM and rt.get("azure_plain", True) else None
+        )
+
+        self.results: Dict[str, Any] = {}
         self.reset(
             sentence,
             sample_rate=sample_rate,
@@ -48,6 +62,7 @@ class RealtimeSession:
             teacher_id=teacher_id,
             student_id=student_id,
         )
+        self._init_engines()
 
     # ------------------------------------------------------------------ lifecycle
     def reset(
@@ -60,8 +75,6 @@ class RealtimeSession:
         student_id: int = 0,
     ) -> None:
         """Prepare the session for a new recording."""
-        # Generate a new unique identifier so that each recording can be stored
-        # separately in the database and on disk.
         self.id = str(uuid.uuid4())
         self.last_used = time.time()
         self.sentence = sentence
@@ -70,27 +83,32 @@ class RealtimeSession:
         self.teacher_id = teacher_id
         self.student_id = student_id
 
-        self.phon_q = queue.Queue()
-        self.asr_q = queue.Queue()
-        self.azure_pron_q = None
-        self.azure_plain_q = None
+        queues = [q for q in (self.phon_q, self.asr_q, self.azure_pron_q, self.azure_plain_q) if q is not None]
+        flush_audio_queue(queues)
 
-        self.results = {
-            "session_id": self.id,
-            "reference_text": sentence,
-            "reference_phonemes": analysis_pipeline._ref_ph_map(sentence),
-            "audio_file": None,
-            "start_time": time.time(),
-            "end_time": None,
-            "azure_plain": None,
-            "azure_pronunciation": None,
-            "wav2vec2_asr": None,
-            "wav2vec2_phonemes": None,
-            "metadata": {
-                "language": "nl-NL",
-                "chunk_duration": config.CHUNK_DURATION,
-            },
-        }
+        self.results.clear()
+        self.results.update(
+            {
+                "session_id": self.id,
+                "reference_text": sentence,
+                "reference_phonemes": analysis_pipeline._ref_ph_map(sentence),
+                "audio_file": None,
+                "start_time": time.time(),
+                "end_time": None,
+                "azure_plain": {"final_transcript": None, "interim_transcripts": []},
+                "azure_pronunciation": {
+                    "final_transcript": None,
+                    "word_timings": [],
+                    "pronunciation_scores": {},
+                },
+                "wav2vec2_asr": [],
+                "wav2vec2_phonemes": [],
+                "metadata": {
+                    "language": "nl-NL",
+                    "chunk_duration": config.CHUNK_DURATION,
+                },
+            }
+        )
 
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         self.wav_path = tmp.name
@@ -101,52 +119,57 @@ class RealtimeSession:
         self.wavefile.setframerate(self.sample_rate)
         self.chunk_count = 0
 
+        if getattr(self, "azure_pron", None) is not None:
+            self.azure_pron.update_reference_text(sentence)
+
+    def _init_engines(self) -> None:
+        """Create or restart recogniser engines."""
         rt = config.REALTIME_FLAGS
 
-        if config.AZURE_PUSH_STREAM and rt.get("azure_pron", True):
-            self.azure_pron_q = queue.Queue()
-        if config.AZURE_PUSH_STREAM and rt.get("azure_plain", True):
-            self.azure_plain_q = queue.Queue()
+        if getattr(self, "phon_thread", None) is None or not self.phon_thread.is_alive():
+            self.phon_thread = Wav2Vec2PhonemeExtractor(
+                sample_rate=self.sample_rate,
+                chunk_duration=config.CHUNK_DURATION,
+                results=self.results,
+                realtime=rt.get("w2v2_phonemes", True),
+                audio_queue=self.phon_q,
+            )
+            if self.phon_thread.realtime:
+                self.phon_thread.start()
 
-        # Wav2Vec2 engines
-        self.phon_thread = Wav2Vec2PhonemeExtractor(
-            sample_rate=self.sample_rate,
-            chunk_duration=config.CHUNK_DURATION,
-            results=self.results,
-            realtime=rt.get("w2v2_phonemes", True),
-            audio_queue=self.phon_q,
-        )
-        self.asr_thread = Wav2Vec2Transcriber(
-            sample_rate=self.sample_rate,
-            chunk_duration=config.CHUNK_DURATION,
-            results=self.results,
-            realtime=rt.get("w2v2_asr", True),
-            audio_queue=self.asr_q,
-        )
+        if getattr(self, "asr_thread", None) is None or not self.asr_thread.is_alive():
+            self.asr_thread = Wav2Vec2Transcriber(
+                sample_rate=self.sample_rate,
+                chunk_duration=config.CHUNK_DURATION,
+                results=self.results,
+                realtime=rt.get("w2v2_asr", True),
+                audio_queue=self.asr_q,
+            )
+            if self.asr_thread.realtime:
+                self.asr_thread.start()
 
-        # Azure engines
-        self.azure_pron = AzurePronunciationEvaluator(
-            self.sentence,
-            results=self.results,
-            realtime=rt.get("azure_pron", True),
-            audio_queue=self.azure_pron_q,
-            sample_rate=self.sample_rate,
-        )
-        self.azure_plain = AzurePlainTranscriber(
-            results=self.results,
-            realtime=rt.get("azure_plain", True),
-            audio_queue=self.azure_plain_q,
-            sample_rate=self.sample_rate,
-        )
+        if self.azure_pron_q is not None:
+            if getattr(self, "azure_pron", None) is None:
+                self.azure_pron = AzurePronunciationEvaluator(
+                    self.sentence,
+                    results=self.results,
+                    realtime=rt.get("azure_pron", True),
+                    audio_queue=self.azure_pron_q,
+                    sample_rate=self.sample_rate,
+                )
+            if self.azure_pron.realtime and not getattr(self.azure_pron, "_running", False):
+                self.azure_pron.start()
 
-        if self.phon_thread.realtime:
-            self.phon_thread.start()
-        if self.asr_thread.realtime:
-            self.asr_thread.start()
-        if self.azure_pron.realtime:
-            self.azure_pron.start()
-        if self.azure_plain.realtime:
-            self.azure_plain.start()
+        if self.azure_plain_q is not None:
+            if getattr(self, "azure_plain", None) is None:
+                self.azure_plain = AzurePlainTranscriber(
+                    results=self.results,
+                    realtime=rt.get("azure_plain", True),
+                    audio_queue=self.azure_plain_q,
+                    sample_rate=self.sample_rate,
+                )
+            if self.azure_plain.realtime and not getattr(self.azure_plain, "_running", False):
+                self.azure_plain.start()
 
     @property
     def idle_seconds(self) -> float:

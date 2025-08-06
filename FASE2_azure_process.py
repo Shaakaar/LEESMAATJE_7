@@ -212,7 +212,8 @@ class AzurePronunciationEvaluator:
                 border_style="green"
             )
         )
-        if self._feed_thread is not None:
+        if self.audio_queue is not None:
+            self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
         self.recognizer.start_continuous_recognition()
 
@@ -226,6 +227,27 @@ class AzurePronunciationEvaluator:
             self._feed_thread.join()
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Pron stopped.[/red]\n")
+
+    def update_reference_text(self, text: str):
+        """Replace the reference sentence used for pronunciation scoring."""
+        self.reference_text = text
+        pa_json = json.dumps({
+            "referenceText": self.reference_text,
+            "gradingSystem": "HundredMark",
+            "granularity": "Phoneme",
+            "phonemeAlphabet": "SAPI",
+            "nBestPhonemeCount": 1,
+        })
+        self.pa_cfg = speechsdk.PronunciationAssessmentConfig(json_string=pa_json)
+        self.pa_cfg.enable_prosody_assessment()
+        if self.realtime:
+            self.pa_cfg.apply_to(self.recognizer)
+            phrase_list = speechsdk.PhraseListGrammar.from_recognizer(self.recognizer)
+            try:
+                phrase_list.clear()
+            except Exception:
+                pass
+            phrase_list.addPhrase(self.reference_text)
 
     def process_file(self, wav_path: str):
         """Run pronunciation assessment on a saved WAV."""
@@ -391,7 +413,8 @@ class AzurePlainTranscriber:
             return
         self._running = True
         console.print(Panel.fit("▶ [bold blue]Azure PlainTranscriber listening…[/bold blue]", border_style="blue"))
-        if self._feed_thread is not None:
+        if self.audio_queue is not None:
+            self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
         self.recognizer.start_continuous_recognition()
 
