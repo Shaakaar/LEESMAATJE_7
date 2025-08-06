@@ -44,9 +44,7 @@ class EnginePool:
             self._pool[key] = sess
         else:
             # Preserve the previous identifier so the caller can discard it from
-            # any lookup structures.  ``RealtimeSession.reset`` only clears
-            # per-recording buffers and reuses the already loaded recogniser
-            # models, keeping them warm for the next request.
+            # any lookup structures.
             old_id = sess.id
             sess.reset(
                 sentence,
