@@ -4,6 +4,7 @@ const SEND_INTERVAL_MS = 100; // how often to upload audio (in ms)
 const DEBUG = false; // set true to enable chunk logs
 const PCM_QUEUE: Int16Array[] = [];
 let lastSend = 0;
+let chunkPromise: Promise<void> = Promise.resolve();
 
 const FILLER_AUDIO = "de_zin_was.wav";
 
@@ -59,13 +60,20 @@ export function useRecorder({
   }, []);
 
   function sendChunk(blob: Blob) {
-    if (!realtimeRef.current || !sessionIdRef.current) return;
+    if (!realtimeRef.current || !sessionIdRef.current) return chunkPromise;
     const form = new FormData();
     form.append("file", blob, "chunk.pcm");
-    fetch(`/api/realtime/chunk/${sessionIdRef.current}`, {
-      method: "POST",
-      body: form,
-    });
+    chunkPromise = chunkPromise
+      .catch(() => {})
+      .then(() =>
+        fetch(`/api/realtime/chunk/${sessionIdRef.current}`, {
+          method: "POST",
+          body: form,
+        }).then(() => {
+          /* no-op */
+        }),
+      );
+    return chunkPromise;
   }
 
   function drawWave(level: number) {
@@ -212,6 +220,7 @@ export function useRecorder({
     processorRef.current?.disconnect();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     const sampleRate = sampleRateRef.current || 48000;
+    const recChunks = recordedChunksRef.current;
     await audioCtxRef.current?.close();
     audioCtxRef.current = null;
     setStatus("Analyseren");
@@ -225,8 +234,11 @@ export function useRecorder({
           pos += c.length;
         }
         PCM_QUEUE.length = 0;
-        sendChunk(new Blob([flat], { type: "application/octet-stream" }));
+        await sendChunk(
+          new Blob([flat], { type: "application/octet-stream" }),
+        );
       }
+      await chunkPromise;
       const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, {
         method: "POST",
       }).then(async (r) => {
@@ -255,13 +267,10 @@ export function useRecorder({
           setStatus("Fout: " + (err as Error).message);
           return;
         }
-        const total = recordedChunksRef.current.reduce(
-          (n, c) => n + c.length,
-          0,
-        );
+        const total = recChunks.reduce((n, c) => n + c.length, 0);
         const flat = new Int16Array(total);
         let pos = 0;
-        for (const c of recordedChunksRef.current) {
+        for (const c of recChunks) {
           flat.set(c, pos);
           pos += c.length;
         }
@@ -278,10 +287,10 @@ export function useRecorder({
     }
 
     // Offline mode: process the full recording in one request
-    const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
+    const total = recChunks.reduce((n, c) => n + c.length, 0);
     const flat = new Int16Array(total);
     let pos = 0;
-    for (const c of recordedChunksRef.current) {
+    for (const c of recChunks) {
       flat.set(c, pos);
       pos += c.length;
     }
