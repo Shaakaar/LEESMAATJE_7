@@ -217,14 +217,14 @@ class AzurePronunciationEvaluator:
             self._feed_thread.start()
         self.recognizer.start_continuous_recognition()
 
-    def stop(self, timeout: float = 1.0):
+    def stop(self, timeout: float | None = None):
         if not self.realtime or not self._running:
             return
         self._running = False
         console.print("[red]■ Stopping Azure Pron…[/red]")
-        self.recognizer.stop_continuous_recognition()
         if self._feed_thread is not None:
             self._feed_thread.join()
+        self.recognizer.stop_continuous_recognition()
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Pron stopped.[/red]\n")
 
@@ -439,14 +439,14 @@ class AzurePlainTranscriber:
             self._feed_thread.start()
         self.recognizer.start_continuous_recognition()
 
-    def stop(self, timeout: float = 1.0):
+    def stop(self, timeout: float | None = None):
         if not self.realtime or not self._running:
             return
         self._running = False
         console.print("[red]■ Stopping Azure Plain…[/red]")
-        self.recognizer.stop_continuous_recognition()
         if self._feed_thread is not None:
             self._feed_thread.join()
+        self.recognizer.stop_continuous_recognition()
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Plain stopped.[/red]\n")
 
