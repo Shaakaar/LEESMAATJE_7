@@ -90,51 +90,9 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
             try:
                 pcm_frames = self.audio_q.get(timeout=1.0)
                 if pcm_frames is None:
-                    if not self.running:
-                        break
-                    if len(self.buffer) > 0:
-                        if self.sample_rate != 16000:
-                            float32_audio = self.buffer.astype(np.float32) / 32768.0
-                            resampled = resampy.resample(float32_audio, self.sample_rate, 16000)
-                            model_input = resampled
-                        else:
-                            model_input = self.buffer.astype(np.float32) / 32768.0
-                        with torch.inference_mode():
-                            inputs = self.processor(
-                                model_input, sampling_rate=16000, return_tensors="pt", padding=True
-                            )
-                            iv = inputs.input_values.to(self.device)
-                            logits = self.model(iv).logits
-                            pred_ids = torch.argmax(logits, dim=-1)
-                            transcription = self.processor.batch_decode(pred_ids)[0]
-                            phonemes = transcription.split()
-                        if not phonemes:
-                            rms = float(np.sqrt(np.mean(model_input ** 2)))
-                            console.log(
-                                f"[yellow][W2V2 phonemes] empty decode; samples={len(model_input)}, rms={rms:.6f}[/yellow]"
-                            )
-                            if self.results is not None:
-                                self.results.setdefault("wav2vec2_phonemes_debug", []).append({
-                                    "stage": "final_chunk",
-                                    "samples": int(len(model_input)),
-                                    "rms": rms,
-                                })
-                        readable_ts = datetime.now().strftime("%H:%M:%S")
-                        if self.results is not None:
-                            self.results["wav2vec2_phonemes"].append({
-                                "timestamp": readable_ts,
-                                "phonemes": phonemes,
-                            })
-                        console.print(
-                            Panel.fit(
-                                Text(f"[{readable_ts}]  {' '.join(phonemes)}", style="white"),
-                                title="[bold magenta]Phonemes (Wav2Vec2)[/bold magenta]  (final short chunk)",
-                                border_style="magenta",
-                                width=80,
-                            )
-                        )
-                        self.buffer = np.zeros((0,), dtype=np.int16)
-                    continue
+                    if self.buffer.size:
+                        self._process_final_chunk()
+                    break
             except queue.Empty:
                 continue
             self.buffer = np.concatenate((self.buffer, pcm_frames), axis=0)
@@ -183,54 +141,57 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
                 )
 
         # ─────────────── Final short‐chunk inference ───────────────
-        if len(self.buffer) > 0:
-            if self.sample_rate != 16000:
-                float32_audio = self.buffer.astype(np.float32) / 32768.0
-                resampled = resampy.resample(float32_audio, self.sample_rate, 16000)
-                model_input = resampled
-            else:
-                model_input = self.buffer.astype(np.float32) / 32768.0
+        if self.buffer.size:
+            self._process_final_chunk()
 
-            with torch.inference_mode():
-                inputs = self.processor(
-                    model_input, sampling_rate=16000, return_tensors="pt", padding=True
-                )
-                iv = inputs.input_values.to(self.device)
-                logits = self.model(iv).logits
-                pred_ids = torch.argmax(logits, dim=-1)
-                transcription = self.processor.batch_decode(pred_ids)[0]
-                phonemes = transcription.split()
+        console.print("[magenta]■ Wav2Vec2PhonemeExtractor thread stopped.[/magenta]\n")
 
-            if not phonemes:
-                rms = float(np.sqrt(np.mean(model_input ** 2)))
-                console.log(
-                    f"[yellow][W2V2 phonemes] empty decode; samples={len(model_input)}, rms={rms:.6f}[/yellow]"
-                )
-                if self.results is not None:
-                    self.results.setdefault("wav2vec2_phonemes_debug", []).append({
+    def _process_final_chunk(self) -> None:
+        if self.sample_rate != 16000:
+            float32_audio = self.buffer.astype(np.float32) / 32768.0
+            resampled = resampy.resample(float32_audio, self.sample_rate, 16000)
+            model_input = resampled
+        else:
+            model_input = self.buffer.astype(np.float32) / 32768.0
+
+        with torch.inference_mode():
+            inputs = self.processor(
+                model_input, sampling_rate=16000, return_tensors="pt", padding=True
+            )
+            iv = inputs.input_values.to(self.device)
+            logits = self.model(iv).logits
+            pred_ids = torch.argmax(logits, dim=-1)
+            transcription = self.processor.batch_decode(pred_ids)[0]
+            phonemes = transcription.split()
+
+        if not phonemes:
+            rms = float(np.sqrt(np.mean(model_input ** 2)))
+            console.log(
+                f"[yellow][W2V2 phonemes] empty decode; samples={len(model_input)}, rms={rms:.6f}[/yellow]"
+            )
+            if self.results is not None:
+                self.results.setdefault("wav2vec2_phonemes_debug", []).append(
+                    {
                         "stage": "final_chunk",
                         "samples": int(len(model_input)),
                         "rms": rms,
-                    })
-
-            readable_ts = datetime.now().strftime("%H:%M:%S")
-
-            if self.results is not None:
-                self.results["wav2vec2_phonemes"].append({
-                    "timestamp": readable_ts,
-                    "phonemes": phonemes
-                })
-
-            console.print(
-                Panel.fit(
-                    Text(f"[{readable_ts}]  {' '.join(phonemes)}", style="white"),
-                    title="[bold magenta]Phonemes (Wav2Vec2)[/bold magenta]  (final short chunk)",
-                    border_style="magenta",
-                    width=80
+                    }
                 )
-            )
 
-        console.print("[magenta]■ Wav2Vec2PhonemeExtractor thread stopped.[/magenta]\n")
+        readable_ts = datetime.now().strftime("%H:%M:%S")
+        if self.results is not None:
+            self.results["wav2vec2_phonemes"].append(
+                {"timestamp": readable_ts, "phonemes": phonemes}
+            )
+        console.print(
+            Panel.fit(
+                Text(f"[{readable_ts}]  {' '.join(phonemes)}", style="white"),
+                title="[bold magenta]Phonemes (Wav2Vec2)[/bold magenta]  (final short chunk)",
+                border_style="magenta",
+                width=80,
+            )
+        )
+        self.buffer = np.zeros((0,), dtype=np.int16)
 
     def stop(self):
         self.running = False
@@ -341,48 +302,9 @@ class Wav2Vec2Transcriber(threading.Thread):
             try:
                 pcm_frames = self.audio_q.get(timeout=1.0)
                 if pcm_frames is None:
-                    if not self.running:
-                        break
-                    if len(self.buffer) > 0:
-                        if self.sample_rate != 16000:
-                            float_chunk = self.buffer.astype(np.float32) / 32768.0
-                            float_chunk = resampy.resample(float_chunk, self.sample_rate, 16000)
-                        else:
-                            float_chunk = self.buffer.astype(np.float32) / 32768.0
-                        input_values = self.processor(
-                            float_chunk, sampling_rate=16000, return_tensors="pt", padding=True
-                        ).input_values.to(self.device)
-                        with torch.inference_mode():
-                            logits = self.model(input_values).logits
-                            pred_ids = torch.argmax(logits, dim=-1)
-                            transcript = self.processor.batch_decode(pred_ids)[0]
-                        ts = datetime.now().strftime("%H:%M:%S")
-                        if not transcript.strip():
-                            rms = float(np.sqrt(np.mean(float_chunk ** 2)))
-                            console.log(
-                                f"[yellow][W2V2 ASR] empty decode; samples={len(float_chunk)}, rms={rms:.6f}[/yellow]"
-                            )
-                            if self.results is not None:
-                                self.results.setdefault("wav2vec2_asr_debug", []).append({
-                                    "stage": "final_chunk",
-                                    "samples": int(len(float_chunk)),
-                                    "rms": rms,
-                                })
-                        if self.results is not None:
-                            self.results["wav2vec2_asr"].append({
-                                "timestamp": ts,
-                                "transcript": transcript,
-                            })
-                        console.print(
-                            Panel.fit(
-                                Text(f"[{ts}]  {transcript}", style="white"),
-                                title="[bold cyan]ASR Text (Wav2Vec2)[/bold cyan]  (final short chunk)",
-                                border_style="cyan",
-                                width=80,
-                            )
-                        )
-                        self.buffer = np.zeros((0,), dtype=np.int16)
-                    continue
+                    if self.buffer.size:
+                        self._process_final_chunk()
+                    break
             except queue.Empty:
                 continue
 
@@ -425,52 +347,56 @@ class Wav2Vec2Transcriber(threading.Thread):
                 )
 
         # ─────────────── Final short‐chunk inference ───────────────
-        if len(self.buffer) > 0:
-            if self.sample_rate != 16000:
-                float_chunk = self.buffer.astype(np.float32) / 32768.0
-                float_chunk = resampy.resample(float_chunk, self.sample_rate, 16000)
-            else:
-                float_chunk = self.buffer.astype(np.float32) / 32768.0
+        if self.buffer.size:
+            self._process_final_chunk()
 
-            input_values = self.processor(
-                float_chunk, sampling_rate=16000, return_tensors="pt", padding=True
-            ).input_values.to(self.device)
+        console.print("[cyan]■ Wav2Vec2Transcriber thread stopped.[/cyan]\n")
 
-            with torch.inference_mode():
-                logits = self.model(input_values).logits
-                pred_ids = torch.argmax(logits, dim=-1)
-                transcript = self.processor.batch_decode(pred_ids)[0]
+    def _process_final_chunk(self) -> None:
+        if self.sample_rate != 16000:
+            float_chunk = self.buffer.astype(np.float32) / 32768.0
+            float_chunk = resampy.resample(float_chunk, self.sample_rate, 16000)
+        else:
+            float_chunk = self.buffer.astype(np.float32) / 32768.0
 
-            ts = datetime.now().strftime("%H:%M:%S")
+        input_values = self.processor(
+            float_chunk, sampling_rate=16000, return_tensors="pt", padding=True
+        ).input_values.to(self.device)
 
-            if not transcript.strip():
-                rms = float(np.sqrt(np.mean(float_chunk ** 2)))
-                console.log(
-                    f"[yellow][W2V2 ASR] empty decode; samples={len(float_chunk)}, rms={rms:.6f}[/yellow]"
-                )
-                if self.results is not None:
-                    self.results.setdefault("wav2vec2_asr_debug", []).append({
+        with torch.inference_mode():
+            logits = self.model(input_values).logits
+            pred_ids = torch.argmax(logits, dim=-1)
+            transcript = self.processor.batch_decode(pred_ids)[0]
+
+        ts = datetime.now().strftime("%H:%M:%S")
+
+        if not transcript.strip():
+            rms = float(np.sqrt(np.mean(float_chunk ** 2)))
+            console.log(
+                f"[yellow][W2V2 ASR] empty decode; samples={len(float_chunk)}, rms={rms:.6f}[/yellow]"
+            )
+            if self.results is not None:
+                self.results.setdefault("wav2vec2_asr_debug", []).append(
+                    {
                         "stage": "final_chunk",
                         "samples": int(len(float_chunk)),
                         "rms": rms,
-                    })
-
-            if self.results is not None:
-                self.results["wav2vec2_asr"].append({
-                    "timestamp": ts,
-                    "transcript": transcript
-                })
-
-            console.print(
-                Panel.fit(
-                    Text(f"[{ts}]  {transcript}", style="white"),
-                    title="[bold cyan]ASR Text (Wav2Vec2)[/bold cyan]  (final short chunk)",
-                    border_style="cyan",
-                    width=80
+                    }
                 )
-            )
 
-        console.print("[cyan]■ Wav2Vec2Transcriber thread stopped.[/cyan]\n")
+        if self.results is not None:
+            self.results["wav2vec2_asr"].append(
+                {"timestamp": ts, "transcript": transcript}
+            )
+        console.print(
+            Panel.fit(
+                Text(f"[{ts}]  {transcript}", style="white"),
+                title="[bold cyan]ASR Text (Wav2Vec2)[/bold cyan]  (final short chunk)",
+                border_style="cyan",
+                width=80,
+            )
+        )
+        self.buffer = np.zeros((0,), dtype=np.int16)
 
     def stop(self):
         self.running = False

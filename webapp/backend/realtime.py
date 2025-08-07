@@ -230,17 +230,14 @@ class RealtimeSession:
             self.azure_plain_q.put(None)
         self.wavefile.close()
 
-        while (
-            not self.phon_q.empty()
-            or not self.asr_q.empty()
-            or (self.azure_pron_q is not None and not self.azure_pron_q.empty())
-            or (self.azure_plain_q is not None and not self.azure_plain_q.empty())
-        ):
-            time.sleep(0.01)
-        if not self.phon_thread.realtime:
+        if self.phon_thread.realtime:
+            self.phon_thread.join()
+        else:
             self.phon_thread.process_file(self.wav_path)
 
-        if not self.asr_thread.realtime:
+        if self.asr_thread.realtime:
+            self.asr_thread.join()
+        else:
             self.asr_thread.process_file(self.wav_path)
 
         if self.azure_pron.realtime:
