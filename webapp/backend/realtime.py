@@ -10,6 +10,7 @@ from typing import Dict, Any
 import numpy as np
 from FASE2_wav2vec2_process import Wav2Vec2PhonemeExtractor, Wav2Vec2Transcriber
 from FASE2_azure_process import AzurePronunciationEvaluator, AzurePlainTranscriber
+from FASE2_audio import flush_audio_queue
 from rich.console import Console
 from . import config, analysis_pipeline
 import prompt_builder
@@ -231,8 +232,15 @@ class RealtimeSession:
         if self.azure_plain_q is not None:
             self.azure_plain_q.put(None)
         self.wavefile.close()
-        while not self.phon_q.empty() or not self.asr_q.empty():
+
+        deadline = time.time() + 2.0
+        while time.time() < deadline and (
+            not self.phon_q.empty() or not self.asr_q.empty()
+        ):
             time.sleep(0.05)
+        if not self.phon_q.empty() or not self.asr_q.empty():
+            console.log("[yellow]Audio queues not drained; forcing flush.[/yellow]")
+            flush_audio_queue([self.phon_q, self.asr_q])
         if not self.phon_thread.realtime:
             self.phon_thread.process_file(self.wav_path)
 
