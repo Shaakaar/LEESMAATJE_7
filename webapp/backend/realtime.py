@@ -86,16 +86,15 @@ class RealtimeSession:
             self.phon_thread.audio_q = self.phon_q
             self.phon_thread.buffer = np.zeros((0,), dtype=np.int16)
         if getattr(self, "asr_thread", None) is not None:
-            self.asr_thread.audio_q = self.asr_q
-            self.asr_thread.buffer = np.zeros((0,), dtype=np.int16)
+            self.asr_thread.reset_queue(self.asr_q)
         if getattr(self, "azure_pron", None) is not None and self.azure_pron_q is not None:
             self.azure_pron.reset_stream(self.azure_pron_q, self.sample_rate)
             if self.azure_pron.realtime:
-                self.azure_pron.start()
+                self.azure_pron.start_continuous_recognition_async()
         if getattr(self, "azure_plain", None) is not None and self.azure_plain_q is not None:
             self.azure_plain.reset_stream(self.azure_plain_q, self.sample_rate)
             if self.azure_plain.realtime:
-                self.azure_plain.start()
+                self.azure_plain.start_continuous_recognition_async()
 
         self.results.clear()
         self.results.update(
@@ -249,6 +248,11 @@ class RealtimeSession:
             self.azure_plain.stop()
         else:
             self.azure_plain.process_file(self.wav_path)
+
+        if getattr(self.azure_pron, "_feed_thread", None) is not None:
+            self.azure_pron._feed_thread.join()
+        if getattr(self.azure_plain, "_feed_thread", None) is not None:
+            self.azure_plain._feed_thread.join()
 
         console.log(f"wrote {self.chunk_count} chunks totalling {os.path.getsize(self.wav_path)} bytes")
         self.results["end_time"] = time.time()
