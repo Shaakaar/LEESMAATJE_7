@@ -5,6 +5,7 @@ import tempfile
 import time
 import json
 import queue
+from time import perf_counter_ns
 from typing import Dict, Any
 
 import numpy as np
@@ -16,6 +17,23 @@ import prompt_builder
 
 console = Console()
 DEBUG_CHUNKS = False
+DEBUG_TIMELINE = bool(os.getenv("DEBUG_TIMELINE"))
+
+
+class Timeline:
+    """Collect coarse timing marks relative to instantiation."""
+
+    def __init__(self) -> None:
+        self._start = perf_counter_ns()
+        self._marks: dict[str, int] = {}
+
+    def mark(self, name: str) -> None:
+        self._marks[name] = perf_counter_ns()
+        if DEBUG_TIMELINE:
+            console.log(f"[timeline] {name}")
+
+    def to_dict(self) -> dict[str, float]:
+        return {k: (v - self._start) / 1_000_000 for k, v in self._marks.items()}
 
 
 class RealtimeSession:
@@ -34,6 +52,7 @@ class RealtimeSession:
         filler_audio: str | None = None,
         teacher_id: int = 0,
         student_id: int = 0,
+        timeline: Timeline | None = None,
     ):
         self.last_used = time.time()
         self.sample_rate = sample_rate
@@ -41,6 +60,8 @@ class RealtimeSession:
         self.filler_audio = filler_audio
         self.teacher_id = teacher_id
         self.student_id = student_id
+
+        self.timeline = timeline or Timeline()
 
         self.phon_q = queue.Queue()
         self.asr_q = queue.Queue()
@@ -54,6 +75,7 @@ class RealtimeSession:
             filler_audio=filler_audio,
             teacher_id=teacher_id,
             student_id=student_id,
+            timeline=self.timeline,
         )
 
     # ------------------------------------------------------------------ lifecycle
@@ -65,6 +87,7 @@ class RealtimeSession:
         filler_audio: str | None = None,
         teacher_id: int = 0,
         student_id: int = 0,
+        timeline: Timeline | None = None,
     ) -> None:
         """Prepare the session for a new recording."""
         console.log(
@@ -77,6 +100,8 @@ class RealtimeSession:
         self.filler_audio = filler_audio
         self.teacher_id = teacher_id
         self.student_id = student_id
+
+        self.timeline = timeline or Timeline()
 
         rt = config.REALTIME_FLAGS
         self.phon_q = queue.Queue()
@@ -142,6 +167,8 @@ class RealtimeSession:
         console.log(
             f"[reset] ASR thread alive after init? {getattr(self, 'asr_thread', None) is not None and self.asr_thread.is_alive()}"
         )
+        if self.timeline:
+            self.timeline.mark("engine_reset_done")
 
     def _init_engines(self) -> None:
         """Create or restart recogniser engines."""
@@ -154,9 +181,15 @@ class RealtimeSession:
                 results=self.results,
                 realtime=rt.get("w2v2_phonemes", True),
                 audio_queue=self.phon_q,
+                timeline=self.timeline,
             )
             if self.phon_thread.realtime:
                 self.phon_thread.start()
+                if self.timeline:
+                    self.timeline.mark("w2v2_ready_ph")
+        else:
+            if self.timeline:
+                self.timeline.mark("w2v2_ready_ph")
 
         if getattr(self, "asr_thread", None) is None or not self.asr_thread.is_alive():
             self.asr_thread = Wav2Vec2Transcriber(
@@ -165,10 +198,17 @@ class RealtimeSession:
                 results=self.results,
                 realtime=rt.get("w2v2_asr", True),
                 audio_queue=self.asr_q,
+                timeline=self.timeline,
             )
             if self.asr_thread.realtime:
                 self.asr_thread.start()
+                if self.timeline:
+                    self.timeline.mark("w2v2_ready_asr")
+        else:
+            if self.timeline:
+                self.timeline.mark("w2v2_ready_asr")
 
+        azure_started = False
         if self.azure_pron_q is not None:
             if getattr(self, "azure_pron", None) is None:
                 self.azure_pron = AzurePronunciationEvaluator(
@@ -177,9 +217,11 @@ class RealtimeSession:
                     realtime=rt.get("azure_pron", True),
                     audio_queue=self.azure_pron_q,
                     sample_rate=self.sample_rate,
+                    timeline=self.timeline,
                 )
             if self.azure_pron.realtime and not getattr(self.azure_pron, "_running", False):
                 self.azure_pron.start()
+                azure_started = True
 
         if self.azure_plain_q is not None:
             if getattr(self, "azure_plain", None) is None:
@@ -188,9 +230,15 @@ class RealtimeSession:
                     realtime=rt.get("azure_plain", True),
                     audio_queue=self.azure_plain_q,
                     sample_rate=self.sample_rate,
+                    timeline=self.timeline,
                 )
             if self.azure_plain.realtime and not getattr(self.azure_plain, "_running", False):
                 self.azure_plain.start()
+                azure_started = True
+
+        if azure_started and self.timeline:
+            if "azure_start_called" not in self.timeline._marks:
+                self.timeline.mark("azure_start_called")
 
     @property
     def idle_seconds(self) -> float:
@@ -223,6 +271,8 @@ class RealtimeSession:
         """Add a chunk of 16‑bit mono PCM data."""
         arr = np.frombuffer(pcm_data, dtype=np.int16)
         self.chunk_count += 1
+        if self.chunk_count == 1 and self.timeline:
+            self.timeline.mark("first_chunk_received")
         if DEBUG_CHUNKS:
             console.log(f"received chunk {self.chunk_count} of {len(pcm_data)} bytes")
         # Fan out chunk to all engine queues

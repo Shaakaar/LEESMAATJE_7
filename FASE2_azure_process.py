@@ -35,6 +35,7 @@ class AzurePronunciationEvaluator:
         *,
         audio_queue: queue.Queue | None = None,
         sample_rate: int = 16000,
+        timeline=None,
     ):
         """Pronunciation assessment via Azure.
 
@@ -66,6 +67,7 @@ class AzurePronunciationEvaluator:
         self.realtime = realtime
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
+        self.timeline = timeline
         self._feed_thread = None
         self._push_stream = None
         self.bytes_pushed = 0
@@ -142,6 +144,8 @@ class AzurePronunciationEvaluator:
                 break
             try:
                 data = pcm.tobytes()
+                if self.timeline is not None and "azure_first_write" not in getattr(self.timeline, "_marks", {}):
+                    self.timeline.mark("azure_first_write")
                 self.bytes_pushed += len(data)
                 self._push_stream.write(data)
             except Exception:
@@ -150,6 +154,8 @@ class AzurePronunciationEvaluator:
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
         self._event_counts["recognizing"] += 1
+        if self.timeline is not None and "azure_session_started" not in getattr(self.timeline, "_marks", {}):
+            self.timeline.mark("azure_session_started")
         console.print(f"[yellow][Azure Pron interim][/yellow] {evt.result.text}", end="\r")
 
     def _on_final(self, evt):
@@ -349,6 +355,7 @@ class AzurePlainTranscriber:
         *,
         audio_queue: queue.Queue | None = None,
         sample_rate: int = 16000,
+        timeline=None,
     ):
         load_dotenv()
         key    = os.getenv("AZURE_SPEECH_KEY")
@@ -364,6 +371,7 @@ class AzurePlainTranscriber:
         self.speech_config = speech_config
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
+        self.timeline = timeline
         self._push_stream = None
         self._feed_thread = None
         self.bytes_pushed = 0
@@ -412,6 +420,8 @@ class AzurePlainTranscriber:
                 break
             try:
                 data = pcm.tobytes()
+                if self.timeline is not None and "azure_first_write" not in getattr(self.timeline, "_marks", {}):
+                    self.timeline.mark("azure_first_write")
                 self.bytes_pushed += len(data)
                 self._push_stream.write(data)
             except Exception:
@@ -420,6 +430,8 @@ class AzurePlainTranscriber:
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
         self._event_counts["recognizing"] += 1
+        if self.timeline is not None and "azure_session_started" not in getattr(self.timeline, "_marks", {}):
+            self.timeline.mark("azure_session_started")
         txt = evt.result.text
         console.print(f"[blue][Azure Plain interim][/blue] {txt}", end="\r")
         if self.results is not None:

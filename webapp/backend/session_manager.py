@@ -33,6 +33,8 @@ class EnginePool:
         key = (teacher_id, student_id)
         sess = self._pool.get(key)
         old_id: str | None = None
+        timeline = realtime.Timeline()
+        timeline.mark("/start_in")
         if sess is None:
             sess = realtime.RealtimeSession(
                 sentence,
@@ -40,6 +42,7 @@ class EnginePool:
                 filler_audio=filler_audio,
                 teacher_id=teacher_id,
                 student_id=student_id,
+                timeline=timeline,
             )
             self._pool[key] = sess
         else:
@@ -52,6 +55,7 @@ class EnginePool:
                 filler_audio=filler_audio,
                 teacher_id=teacher_id,
                 student_id=student_id,
+                timeline=timeline,
             )
         return sess, old_id
 
