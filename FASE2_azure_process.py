@@ -23,24 +23,6 @@ from rich.panel import Panel
 console = Console()
 
 
-def _feed_worker(audio_queue: queue.Queue | None, push_stream) -> None:
-    """Forward PCM frames from a queue into an Azure push stream."""
-    if push_stream is None or audio_queue is None:
-        return
-    while True:
-        pcm = audio_queue.get()
-        if pcm is None:
-            break
-        try:
-            push_stream.write(pcm.tobytes())
-        except Exception:
-            break
-    try:
-        push_stream.close()
-    except Exception:
-        pass
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Pronunciation Evaluator
 # ─────────────────────────────────────────────────────────────────────────────
@@ -246,13 +228,6 @@ class AzurePronunciationEvaluator:
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Pron stopped.[/red]\n")
 
-    def start_continuous_recognition_async(self):
-        if not self.realtime or self._running:
-            return
-        self._running = True
-        self._done_event.clear()
-        self.recognizer.start_continuous_recognition_async()
-
     def update_reference_text(self, text: str):
         """Replace the reference sentence used for pronunciation scoring."""
         self.reference_text = text
@@ -293,12 +268,7 @@ class AzurePronunciationEvaluator:
         except Exception:
             # Fallback in case the private API changes
             self.recognizer.audio_config = audio_config  # type: ignore[attr-defined]
-        if self._feed_thread and self._feed_thread.is_alive():
-            self._feed_thread.join()
-        self._feed_thread = threading.Thread(
-            target=_feed_worker, args=(self.audio_queue, self._push_stream), daemon=True
-        )
-        self._feed_thread.start()
+        self._feed_thread = None
 
     def process_file(self, wav_path: str):
         """Run pronunciation assessment on a saved WAV."""
@@ -480,13 +450,6 @@ class AzurePlainTranscriber:
         self._done_event.wait(timeout=timeout)
         console.print("[red]■ Azure Plain stopped.[/red]\n")
 
-    def start_continuous_recognition_async(self):
-        if not self.realtime or self._running:
-            return
-        self._running = True
-        self._done_event.clear()
-        self.recognizer.start_continuous_recognition_async()
-
     def process_file(self, wav_path: str):
         """Transcribe a saved WAV using Azure."""
         if os.path.getsize(wav_path) == 0:
@@ -524,9 +487,4 @@ class AzurePlainTranscriber:
             self.recognizer._impl.set_audio_config(audio_config._impl)
         except Exception:
             self.recognizer.audio_config = audio_config  # type: ignore[attr-defined]
-        if self._feed_thread and self._feed_thread.is_alive():
-            self._feed_thread.join()
-        self._feed_thread = threading.Thread(
-            target=_feed_worker, args=(self.audio_queue, self._push_stream), daemon=True
-        )
-        self._feed_thread.start()
+        self._feed_thread = None
