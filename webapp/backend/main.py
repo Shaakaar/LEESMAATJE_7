@@ -1,4 +1,12 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
+from fastapi import (
+    FastAPI,
+    File,
+    UploadFile,
+    HTTPException,
+    Form,
+    Request,
+    BackgroundTasks,
+)
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 import json
@@ -9,6 +17,7 @@ import tempfile
 import shutil
 import sqlite3
 import asyncio
+from rich.console import Console
 
 from . import config, storage
 from .session_manager import EnginePool
@@ -30,6 +39,8 @@ import gpt_client
 # dependencies when they are not installed.
 sessions: dict[str, object] = {}
 engine_pool = EnginePool()
+
+console = Console()
 
 app = FastAPI()
 storage.init_db()
@@ -67,6 +78,17 @@ app.mount(
 
 sent_index = 0
 models_ready = False
+
+
+def _dump_prompt(prompt_text: str, json_text: str) -> None:
+    try:
+        console.rule("[bold green]System Prompt[/bold green]")
+        console.print(prompt_text)
+        console.rule("[bold green]JSON Request[/bold green]")
+        console.print_json(json_text)
+    except Exception:
+        # Never crash the server on logging issues
+        pass
 
 
 def _print_timeline(results: dict) -> None:
@@ -368,7 +390,7 @@ async def realtime_chunk(sid: str, file: UploadFile = File(...)):
 
 
 @app.post("/api/realtime/stop/{sid}")
-async def realtime_stop(sid: str, request: Request):
+async def realtime_stop(sid: str, request: Request, background: BackgroundTasks):
     sess = sessions.pop(sid, None)
     if not sess:
         raise HTTPException(status_code=404, detail="Unknown session")
@@ -380,6 +402,12 @@ async def realtime_stop(sid: str, request: Request):
     if sess.timeline:
         sess.timeline.mark("/stop_in")
     results = sess.stop()
+
+    # If a debug dump is present, print it **after** the response is sent
+    if getattr(sess, "_prompt_dump", None):
+        prompt_text, json_text = sess._prompt_dump
+        background.add_task(_dump_prompt, prompt_text, json_text)
+        sess._prompt_dump = None
     if client_timeline:
         results["timeline_frontend"] = client_timeline
     if sess.timeline:
