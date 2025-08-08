@@ -47,6 +47,7 @@ export function useRecorder({
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const rafRef = useRef<number | null>(null);
   const realtimeRef = useRef(true);
+  const timelineRef = useRef<Record<string, number>>({});
 
   // Fetch runtime config (realtime flag) once
   useEffect(() => {
@@ -62,6 +63,8 @@ export function useRecorder({
     if (!realtimeRef.current || !sessionIdRef.current) return;
     const form = new FormData();
     form.append("file", blob, "chunk.pcm");
+    if (!("first_chunk_sent" in timelineRef.current))
+      timelineRef.current.first_chunk_sent = performance.now();
     fetch(`/api/realtime/chunk/${sessionIdRef.current}`, {
       method: "POST",
       body: form,
@@ -103,6 +106,8 @@ export function useRecorder({
   async function startRecording() {
     console.log("startRecording");
     if (!sentence) return;
+    timelineRef.current = {};
+    timelineRef.current.ui_click = performance.now();
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
     sampleRateRef.current = audioCtx.sampleRate;
@@ -115,6 +120,7 @@ export function useRecorder({
       fd.append("teacher_id", String(teacherId));
       fd.append("student_id", studentId);
       try {
+        timelineRef.current.start_req_sent = performance.now();
         const r = await fetch("/api/realtime/start", {
           method: "POST",
           body: fd,
@@ -123,6 +129,7 @@ export function useRecorder({
         if (!r.ok) throw new Error(j.detail);
         sessionIdRef.current = j.session_id;
         delayRef.current = j.delay_seconds;
+        timelineRef.current.start_resp_ok = performance.now();
       } catch (err) {
         setStatus(
           "Fout: " + (err instanceof Error ? err.message : String(err)),
@@ -139,6 +146,7 @@ export function useRecorder({
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      timelineRef.current.mic_ready = performance.now();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setStatus("Fout: " + message);
@@ -159,6 +167,7 @@ export function useRecorder({
       await audioCtx.audioWorklet.addModule(
         `${import.meta.env.BASE_URL}pcm-worklet.js`,
       );
+      timelineRef.current.worklet_loaded = performance.now();
     } catch (err) {
       console.error("Error loading audio worklet module", err);
       setStatus("Fout: " + (err instanceof Error ? err.message : String(err)));
@@ -169,9 +178,12 @@ export function useRecorder({
     source.connect(analyser);
     analyser.connect(processor);
     processor.connect(audioCtx.destination);
+    timelineRef.current.processor_ready = performance.now();
     processor.port.onmessage = (e) => {
       if (!recordingRef.current) return;
       const pcm = e.data as Int16Array;
+      if (!("first_chunk_captured" in timelineRef.current))
+        timelineRef.current.first_chunk_captured = performance.now();
       recordedChunksRef.current.push(pcm);
       if (!realtimeRef.current) return;
       PCM_QUEUE.push(pcm);
@@ -229,6 +241,8 @@ export function useRecorder({
       }
       const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_timeline: timelineRef.current }),
       }).then(async (r) => {
         const j = await r.json();
         if (!r.ok) throw new Error(j.detail);

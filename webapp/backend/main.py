@@ -333,11 +333,23 @@ async def realtime_chunk(sid: str, file: UploadFile = File(...)):
 
 
 @app.post("/api/realtime/stop/{sid}")
-async def realtime_stop(sid: str):
+async def realtime_stop(sid: str, request: Request):
     sess = sessions.pop(sid, None)
     if not sess:
         raise HTTPException(status_code=404, detail="Unknown session")
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    client_timeline = payload.get("client_timeline") if isinstance(payload, dict) else None
+    if sess.timeline:
+        sess.timeline.mark("/stop_in")
     results = sess.stop()
+    if client_timeline:
+        results["timeline_frontend"] = client_timeline
+    if sess.timeline:
+        sess.timeline.mark("json_ready")
+        results["timeline_backend"] = sess.timeline.to_dict()
     req, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
     from .tts import tts_to_file

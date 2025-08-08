@@ -47,7 +47,16 @@ def _load_asr_model(device: str):
 class Wav2Vec2PhonemeExtractor(threading.Thread):
     """Extracts Dutch phonemes in either real‑time or offline mode."""
 
-    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True, *, audio_queue: queue.Queue | None = None):
+    def __init__(
+        self,
+        sample_rate: int,
+        chunk_duration: float,
+        results: dict | None,
+        realtime: bool = True,
+        *,
+        audio_queue: queue.Queue | None = None,
+        timeline=None,
+    ):
         super().__init__(daemon=True)
         self.realtime = realtime
         self.sample_rate = sample_rate
@@ -64,6 +73,8 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         self.results = results
         if self.results is not None:
             self.results["wav2vec2_phonemes"] = []
+
+        self.timeline = timeline
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor, self.model = _load_phoneme_model(self.device)
@@ -129,6 +140,9 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
                     pred_ids = torch.argmax(logits, dim=-1)
                     transcription = self.processor.batch_decode(pred_ids)[0]
                     phonemes = transcription.split()
+
+                if self.timeline is not None and "w2v2_first_decode" not in getattr(self.timeline, "_marks", {}):
+                    self.timeline.mark("w2v2_first_decode")
 
                 # Get wall-clock “HH:MM:SS” stamp:
                 readable_ts = datetime.now().strftime("%H:%M:%S")
@@ -273,7 +287,16 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
 class Wav2Vec2Transcriber(threading.Thread):
     """Streams Dutch ASR text in real‑time or processes a file offline."""
 
-    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True, *, audio_queue: queue.Queue | None = None):
+    def __init__(
+        self,
+        sample_rate: int,
+        chunk_duration: float,
+        results: dict | None,
+        realtime: bool = True,
+        *,
+        audio_queue: queue.Queue | None = None,
+        timeline=None,
+    ):
         super().__init__(daemon=True)
         self.realtime = realtime
         self.sample_rate = sample_rate
@@ -287,6 +310,8 @@ class Wav2Vec2Transcriber(threading.Thread):
         self.results = results
         if self.results is not None:
             self.results["wav2vec2_asr"] = []
+
+        self.timeline = timeline
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor, self.model = _load_asr_model(self.device)
@@ -349,6 +374,9 @@ class Wav2Vec2Transcriber(threading.Thread):
                     logits = self.model(input_values).logits
                     pred_ids = torch.argmax(logits, dim=-1)
                     transcript = self.processor.batch_decode(pred_ids)[0]
+
+                if self.timeline is not None and "w2v2_first_decode" not in getattr(self.timeline, "_marks", {}):
+                    self.timeline.mark("w2v2_first_decode")
 
                 ts = datetime.now().strftime("%H:%M:%S")
 
