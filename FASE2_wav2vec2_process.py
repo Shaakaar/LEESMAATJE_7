@@ -8,7 +8,6 @@ import resampy
 import torch
 import threading
 
-from FASE2_audio import audio_q
 from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
 from rich.console import Console
 from rich.panel import Panel
@@ -48,7 +47,7 @@ def _load_asr_model(device: str):
 class Wav2Vec2PhonemeExtractor(threading.Thread):
     """Extracts Dutch phonemes in either real‑time or offline mode."""
 
-    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True, *, audio_queue: queue.Queue = audio_q):
+    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True, *, audio_queue: queue.Queue | None = None):
         super().__init__(daemon=True)
         self.realtime = realtime
         self.sample_rate = sample_rate
@@ -58,7 +57,8 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         # shutdown flag allows thread to run across recordings and only exit
         # when ``terminate`` is called.
         self._shutdown = False
-        self.audio_q = audio_queue
+        self.audio_q = audio_queue or queue.Queue()
+        self.eor_event = threading.Event()
 
         # Reference to shared results dict:
         self.results = results
@@ -72,6 +72,11 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         console.print(f"🔄  [magenta]Loading Wav2Vec2 phoneme model[/magenta] on [blue]{self.device}[/blue] …")
         self.model.eval()
         console.print("[magenta]✅  Model loaded.[/magenta]\n")
+
+    def on_new_recording(self, q: queue.Queue):
+        self.audio_q = q
+        self.buffer = np.zeros((0,), dtype=np.int16)
+        self.eor_event.clear()
 
     def run(self):
         if not self.realtime:
@@ -92,12 +97,11 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
             try:
                 pcm_frames = self.audio_q.get(timeout=1.0)
                 if pcm_frames is None:
-                    # Treat ``None`` as a boundary between recordings. Flush
-                    # any buffered audio and reset so the thread can continue
-                    # for the next recording.
+                    # Boundary between recordings – flush once and signal end.
                     if self.buffer.size:
                         self._process_final_chunk()
                     self.buffer = np.zeros((0,), dtype=np.int16)
+                    self.eor_event.set()
                     continue
             except queue.Empty:
                 continue
@@ -269,7 +273,7 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
 class Wav2Vec2Transcriber(threading.Thread):
     """Streams Dutch ASR text in real‑time or processes a file offline."""
 
-    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True, *, audio_queue: queue.Queue = audio_q):
+    def __init__(self, sample_rate: int, chunk_duration: float, results: dict | None, realtime: bool = True, *, audio_queue: queue.Queue | None = None):
         super().__init__(daemon=True)
         self.realtime = realtime
         self.sample_rate = sample_rate
@@ -277,7 +281,8 @@ class Wav2Vec2Transcriber(threading.Thread):
         self.chunk_size = int(sample_rate * chunk_duration)
         self.buffer = np.zeros((0,), dtype=np.int16)
         self._shutdown = False
-        self.audio_q = audio_queue
+        self.audio_q = audio_queue or queue.Queue()
+        self.eor_event = threading.Event()
 
         self.results = results
         if self.results is not None:
@@ -291,6 +296,11 @@ class Wav2Vec2Transcriber(threading.Thread):
 
         self.model.eval()
         console.print("[cyan]✅  Model loaded and ready.[/cyan]\n")
+
+    def on_new_recording(self, q: queue.Queue):
+        self.audio_q = q
+        self.buffer = np.zeros((0,), dtype=np.int16)
+        self.eor_event.clear()
 
     def run(self):
         if not self.realtime:
@@ -314,6 +324,7 @@ class Wav2Vec2Transcriber(threading.Thread):
                     if self.buffer.size:
                         self._process_final_chunk()
                     self.buffer = np.zeros((0,), dtype=np.int16)
+                    self.eor_event.set()
                     continue
             except queue.Empty:
                 continue

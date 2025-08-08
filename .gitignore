@@ -3,3 +3,7 @@ webapp/backend/storage/
 # React build artefacts
 frontend-react/dist
 
+# Ignore sample audio assets
+samples/
+*.wav
+
