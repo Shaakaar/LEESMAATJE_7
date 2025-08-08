@@ -116,6 +116,11 @@ class AzurePronunciationEvaluator:
         self._done_event = threading.Event()
         self._running = False
 
+        # Per-turn gating
+        self._turn_id = None  # type: str | None
+        self._turn_recognized_baseline = 0
+        self._turn_final_event = threading.Event()
+
         # Shared results dict
         self.results = results
         if self.results is not None:
@@ -148,27 +153,34 @@ class AzurePronunciationEvaluator:
 
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
+        if self._turn_id is None:
+            return
         self._event_counts["recognizing"] += 1
         if self.timeline is not None and "azure_handshake_first_event" not in getattr(self.timeline, "_marks", {}):
             self.timeline.mark("azure_handshake_first_event")
         console.print(f"[yellow][Azure Pron interim][/yellow] {evt.result.text}", end="\r")
 
     def _on_final(self, evt):
+        if self._turn_id is None:
+            return
+        if self.results is None or "azure_pronunciation" not in self.results:
+            self._turn_final_event.set()
+            return
         self._event_counts["recognized"] += 1
         text = evt.result.text
         console.print(f"\n[bold green][Azure Pron final][/bold green] {text}")
 
-        if self.results is not None:
-            prev = self.results["azure_pronunciation"].get("final_transcript")
-            if prev:
-                self.results["azure_pronunciation"]["final_transcript"] = f"{prev} {text}".strip()
-            else:
-                self.results["azure_pronunciation"]["final_transcript"] = text
+        prev = self.results["azure_pronunciation"].get("final_transcript")
+        if prev:
+            self.results["azure_pronunciation"]["final_transcript"] = f"{prev} {text}".strip()
+        else:
+            self.results["azure_pronunciation"]["final_transcript"] = text
 
         raw_json = evt.result.properties.get(
             speechsdk.PropertyId.SpeechServiceResponse_JsonResult
         )
         if not raw_json:
+            self._turn_final_event.set()
             return
 
         parsed = json.loads(raw_json)
@@ -202,6 +214,7 @@ class AzurePronunciationEvaluator:
             "prosody_score": round(pa.get("ProsodyScore", 0.0), 1)
             if "ProsodyScore" in pa else None
         }
+        self._turn_final_event.set()
 
     def _on_canceled(self, evt):
         self._event_counts["canceled"] += 1
@@ -253,6 +266,23 @@ class AzurePronunciationEvaluator:
             f"[Azure Pron] bytes pushed={self.bytes_pushed}; events={self._event_counts}"
         )
 
+    # ------------------------------------------------------------------ turns
+    def begin_turn(self, turn_id: str, results: dict) -> None:
+        self._turn_id = turn_id
+        self.results = results
+        self._turn_final_event.clear()
+        self._turn_recognized_baseline = self._event_counts["recognized"]
+
+    def end_turn(self) -> None:
+        self._turn_id = None
+
+    def wait_for_final(self, timeout: float) -> bool:
+        if self.bytes_pushed == 0:
+            return True
+        if self._event_counts["recognized"] > self._turn_recognized_baseline:
+            return True
+        return self._turn_final_event.wait(timeout)
+
     def update_reference_text(self, text: str):
         """Replace the reference sentence used for pronunciation scoring."""
         self.reference_text = text
@@ -276,14 +306,44 @@ class AzurePronunciationEvaluator:
 
     # ------------------------------------------------------------------ reuse
     def reset_stream(self, audio_queue: queue.Queue, sample_rate: int = 16000):
-        """Swap in a fresh queue without recreating recognizer."""
+        """Close previous push stream and create a fresh one."""
         if not self.realtime:
             return
+        try:
+            if self._push_stream is not None:
+                self._push_stream.close()
+        except Exception:
+            pass
+
         old_q = getattr(self, "audio_queue", None)
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
         self.bytes_pushed = 0
         self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
+
+        fmt = speechsdk.audio.AudioStreamFormat(
+            samples_per_second=self.sample_rate, bits_per_sample=16, channels=1
+        )
+        self._push_stream = speechsdk.audio.PushAudioInputStream(stream_format=fmt)
+        audio_config = speechsdk.audio.AudioConfig(stream=self._push_stream)
+
+        self.recognizer = speechsdk.SpeechRecognizer(
+            speech_config=self.speech_config, audio_config=audio_config
+        )
+        # Reapply configs / phrase list
+        self.pa_cfg.apply_to(self.recognizer)
+        phrase_list = speechsdk.PhraseListGrammar.from_recognizer(self.recognizer)
+        try:
+            phrase_list.clear()
+        except Exception:
+            pass
+        phrase_list.addPhrase(self.reference_text)
+
+        self._handlers_attached = False
+        self._attach_handlers_once()
+
+        console.log("[Azure Pron] reset_stream: new push stream")
+
         if self._feed_thread is not None and self._feed_thread.is_alive():
             try:
                 if old_q is not None:
@@ -291,9 +351,8 @@ class AzurePronunciationEvaluator:
             except Exception:
                 pass
             self._feed_thread.join()
-        if self.audio_queue is not None:
-            self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
-            self._feed_thread.start()
+        self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
+        self._feed_thread.start()
 
     def process_file(self, wav_path: str):
         """Run pronunciation assessment on a saved WAV."""
@@ -406,6 +465,10 @@ class AzurePlainTranscriber:
 
         self._done_event = threading.Event()
         self._running = False
+        # Per-turn gating
+        self._turn_id = None  # type: str | None
+        self._turn_recognized_baseline = 0
+        self._turn_final_event = threading.Event()
         self.results = results
         if self.results is not None:
             self.results["azure_plain"] = {
@@ -435,27 +498,34 @@ class AzurePlainTranscriber:
 
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
+        if self._turn_id is None:
+            return
         self._event_counts["recognizing"] += 1
         if self.timeline is not None and "azure_handshake_first_event" not in getattr(self.timeline, "_marks", {}):
             self.timeline.mark("azure_handshake_first_event")
         txt = evt.result.text
         console.print(f"[blue][Azure Plain interim][/blue] {txt}", end="\r")
-        if self.results is not None:
+        if self.results is not None and "azure_plain" in self.results:
             self.results["azure_plain"]["interim_transcripts"].append({
                 "text": txt,
                 "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
     def _on_final(self, evt):
+        if self._turn_id is None:
+            return
+        if self.results is None or "azure_plain" not in self.results:
+            self._turn_final_event.set()
+            return
         self._event_counts["recognized"] += 1
         txt = evt.result.text
         console.print(f"\n[bold blue][Azure Plain final][/bold blue] {txt}")
-        if self.results is not None:
-            prev = self.results["azure_plain"].get("final_transcript")
-            if prev:
-                self.results["azure_plain"]["final_transcript"] = f"{prev} {txt}".strip()
-            else:
-                self.results["azure_plain"]["final_transcript"] = txt
+        prev = self.results["azure_plain"].get("final_transcript")
+        if prev:
+            self.results["azure_plain"]["final_transcript"] = f"{prev} {txt}".strip()
+        else:
+            self.results["azure_plain"]["final_transcript"] = txt
+        self._turn_final_event.set()
 
     def _on_canceled(self, evt):
         self._event_counts["canceled"] += 1
@@ -507,6 +577,23 @@ class AzurePlainTranscriber:
             f"[Azure Plain] bytes pushed={self.bytes_pushed}; events={self._event_counts}"
         )
 
+    # ------------------------------------------------------------------ turns
+    def begin_turn(self, turn_id: str, results: dict) -> None:
+        self._turn_id = turn_id
+        self.results = results
+        self._turn_final_event.clear()
+        self._turn_recognized_baseline = self._event_counts["recognized"]
+
+    def end_turn(self) -> None:
+        self._turn_id = None
+
+    def wait_for_final(self, timeout: float) -> bool:
+        if self.bytes_pushed == 0:
+            return True
+        if self._event_counts["recognized"] > self._turn_recognized_baseline:
+            return True
+        return self._turn_final_event.wait(timeout)
+
     def process_file(self, wav_path: str):
         """Transcribe a saved WAV using Azure."""
         if os.path.getsize(wav_path) == 0:
@@ -528,14 +615,36 @@ class AzurePlainTranscriber:
 
     # ------------------------------------------------------------------ reuse
     def reset_stream(self, audio_queue: queue.Queue, sample_rate: int = 16000):
-        """Install a new queue for the next recording."""
+        """Close previous push stream and create a fresh one."""
         if not self.realtime:
             return
+        try:
+            if self._push_stream is not None:
+                self._push_stream.close()
+        except Exception:
+            pass
+
         old_q = getattr(self, "audio_queue", None)
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
         self.bytes_pushed = 0
         self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
+
+        fmt = speechsdk.audio.AudioStreamFormat(
+            samples_per_second=self.sample_rate, bits_per_sample=16, channels=1
+        )
+        self._push_stream = speechsdk.audio.PushAudioInputStream(stream_format=fmt)
+        audio_config = speechsdk.audio.AudioConfig(stream=self._push_stream)
+
+        self.recognizer = speechsdk.SpeechRecognizer(
+            speech_config=self.speech_config, audio_config=audio_config
+        )
+
+        self._handlers_attached = False
+        self._attach_handlers_once()
+
+        console.log("[Azure Plain] reset_stream: new push stream")
+
         if self._feed_thread is not None and self._feed_thread.is_alive():
             try:
                 if old_q is not None:
@@ -543,6 +652,5 @@ class AzurePlainTranscriber:
             except Exception:
                 pass
             self._feed_thread.join()
-        if self.audio_queue is not None:
-            self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
-            self._feed_thread.start()
+        self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
+        self._feed_thread.start()
