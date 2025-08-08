@@ -68,6 +68,8 @@ class AzurePronunciationEvaluator:
         self.sample_rate = sample_rate
         self._feed_thread = None
         self._push_stream = None
+        self._bytes_written = 0
+        self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
 
         speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
         speech_config.speech_recognition_language = "nl-NL"
@@ -110,8 +112,7 @@ class AzurePronunciationEvaluator:
             # ── Event handlers
             self.recognizer.recognizing.connect(self._on_interim)
             self.recognizer.recognized.connect(self._on_final)
-            if self.audio_queue is not None:
-                self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
+            self.recognizer.canceled.connect(self._on_canceled)
 
         # ── Event-based “done” flag
         self._done_event = threading.Event()
@@ -140,19 +141,19 @@ class AzurePronunciationEvaluator:
             if pcm is None:
                 break
             try:
-                self._push_stream.write(pcm.tobytes())
+                data = pcm.tobytes()
+                self._bytes_written += len(data)
+                self._push_stream.write(data)
             except Exception:
                 break
-        try:
-            self._push_stream.close()
-        except Exception:
-            pass
 
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
+        self._event_counts["recognizing"] += 1
         console.print(f"[yellow][Azure Pron interim][/yellow] {evt.result.text}", end="\r")
 
     def _on_final(self, evt):
+        self._event_counts["recognized"] += 1
         text = evt.result.text
         console.print(f"\n[bold green][Azure Pron final][/bold green] {text}")
 
@@ -201,11 +202,16 @@ class AzurePronunciationEvaluator:
             if "ProsodyScore" in pa else None
         }
 
+    def _on_canceled(self, evt):
+        self._event_counts["canceled"] += 1
+
     # ------------------------------------------------------------------ control
     def start(self):
         if not self.realtime or self._running:
             return
         self._running = True
+        self._bytes_written = 0
+        self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
         console.print(
             Panel.fit(
                 f"▶ [bold green]Azure PronunciationEvaluator[/bold green] listening…\n   “[cyan]{self.reference_text}[/cyan]”",
@@ -215,6 +221,7 @@ class AzurePronunciationEvaluator:
         if self.audio_queue is not None:
             self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
+            console.log("[Azure Pron] feed thread started")
         self.recognizer.start_continuous_recognition()
 
     def stop(self, timeout: float | None = None):
@@ -226,6 +233,9 @@ class AzurePronunciationEvaluator:
             self._feed_thread.join()
         self.recognizer.stop_continuous_recognition()
         self._done_event.wait(timeout=timeout)
+        console.log(
+            f"[Azure Pron] bytes written={self._bytes_written}; events={self._event_counts}"
+        )
         console.print("[red]■ Azure Pron stopped.[/red]\n")
 
     def update_reference_text(self, text: str):
@@ -251,23 +261,11 @@ class AzurePronunciationEvaluator:
 
     # ------------------------------------------------------------------ reuse
     def reset_stream(self, audio_queue: queue.Queue, sample_rate: int = 16000):
-        """Swap in a fresh queue and push-stream without recreating recognizer."""
+        """Swap in a fresh queue without recreating recognizer."""
         if not self.realtime:
             return
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
-        fmt = speechsdk.audio.AudioStreamFormat(
-            samples_per_second=self.sample_rate,
-            bits_per_sample=16,
-            channels=1,
-        )
-        self._push_stream = speechsdk.audio.PushAudioInputStream(stream_format=fmt)
-        audio_config = speechsdk.audio.AudioConfig(stream=self._push_stream)
-        try:
-            self.recognizer._impl.set_audio_config(audio_config._impl)
-        except Exception:
-            # Fallback in case the private API changes
-            self.recognizer.audio_config = audio_config  # type: ignore[attr-defined]
         self._feed_thread = None
 
     def process_file(self, wav_path: str):
@@ -356,6 +354,8 @@ class AzurePlainTranscriber:
         self.sample_rate = sample_rate
         self._push_stream = None
         self._feed_thread = None
+        self._bytes_written = 0
+        self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
 
         if self.realtime and self.audio_queue is not None:
             fmt = speechsdk.audio.AudioStreamFormat(
@@ -375,8 +375,7 @@ class AzurePlainTranscriber:
             )
             self.recognizer.recognizing.connect(self._on_interim)
             self.recognizer.recognized.connect(self._on_final)
-            if self.audio_queue is not None:
-                self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
+            self.recognizer.canceled.connect(self._on_canceled)
 
         self._done_event = threading.Event()
         if self.realtime:
@@ -400,16 +399,15 @@ class AzurePlainTranscriber:
             if pcm is None:
                 break
             try:
-                self._push_stream.write(pcm.tobytes())
+                data = pcm.tobytes()
+                self._bytes_written += len(data)
+                self._push_stream.write(data)
             except Exception:
                 break
-        try:
-            self._push_stream.close()
-        except Exception:
-            pass
 
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
+        self._event_counts["recognizing"] += 1
         txt = evt.result.text
         console.print(f"[blue][Azure Plain interim][/blue] {txt}", end="\r")
         if self.results is not None:
@@ -419,6 +417,7 @@ class AzurePlainTranscriber:
             })
 
     def _on_final(self, evt):
+        self._event_counts["recognized"] += 1
         txt = evt.result.text
         console.print(f"\n[bold blue][Azure Plain final][/bold blue] {txt}")
         if self.results is not None:
@@ -428,15 +427,21 @@ class AzurePlainTranscriber:
             else:
                 self.results["azure_plain"]["final_transcript"] = txt
 
+    def _on_canceled(self, evt):
+        self._event_counts["canceled"] += 1
+
     # ------------------------------------------------------------------ control
     def start(self):
         if not self.realtime or self._running:
             return
         self._running = True
+        self._bytes_written = 0
+        self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
         console.print(Panel.fit("▶ [bold blue]Azure PlainTranscriber listening…[/bold blue]", border_style="blue"))
         if self.audio_queue is not None:
             self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
+            console.log("[Azure Plain] feed thread started")
         self.recognizer.start_continuous_recognition()
 
     def stop(self, timeout: float | None = None):
@@ -448,6 +453,9 @@ class AzurePlainTranscriber:
             self._feed_thread.join()
         self.recognizer.stop_continuous_recognition()
         self._done_event.wait(timeout=timeout)
+        console.log(
+            f"[Azure Plain] bytes written={self._bytes_written}; events={self._event_counts}"
+        )
         console.print("[red]■ Azure Plain stopped.[/red]\n")
 
     def process_file(self, wav_path: str):
@@ -471,20 +479,9 @@ class AzurePlainTranscriber:
 
     # ------------------------------------------------------------------ reuse
     def reset_stream(self, audio_queue: queue.Queue, sample_rate: int = 16000):
-        """Install a new queue and push-stream for the next recording."""
+        """Install a new queue for the next recording."""
         if not self.realtime:
             return
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
-        fmt = speechsdk.audio.AudioStreamFormat(
-            samples_per_second=self.sample_rate,
-            bits_per_sample=16,
-            channels=1,
-        )
-        self._push_stream = speechsdk.audio.PushAudioInputStream(stream_format=fmt)
-        audio_config = speechsdk.audio.AudioConfig(stream=self._push_stream)
-        try:
-            self.recognizer._impl.set_audio_config(audio_config._impl)
-        except Exception:
-            self.recognizer.audio_config = audio_config  # type: ignore[attr-defined]
         self._feed_thread = None
