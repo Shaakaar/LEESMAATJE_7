@@ -68,7 +68,7 @@ class AzurePronunciationEvaluator:
         self.sample_rate = sample_rate
         self._feed_thread = None
         self._push_stream = None
-        self._bytes_written = 0
+        self.bytes_pushed = 0
         self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
 
         speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
@@ -142,7 +142,7 @@ class AzurePronunciationEvaluator:
                 break
             try:
                 data = pcm.tobytes()
-                self._bytes_written += len(data)
+                self.bytes_pushed += len(data)
                 self._push_stream.write(data)
             except Exception:
                 break
@@ -210,7 +210,7 @@ class AzurePronunciationEvaluator:
         if not self.realtime or self._running:
             return
         self._running = True
-        self._bytes_written = 0
+        self.bytes_pushed = 0
         self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
         console.print(
             Panel.fit(
@@ -234,7 +234,7 @@ class AzurePronunciationEvaluator:
         self.recognizer.stop_continuous_recognition()
         self._done_event.wait(timeout=timeout)
         console.log(
-            f"[Azure Pron] bytes written={self._bytes_written}; events={self._event_counts}"
+            f"[Azure Pron] bytes pushed={self.bytes_pushed}; events={self._event_counts}"
         )
         console.print("[red]■ Azure Pron stopped.[/red]\n")
 
@@ -264,9 +264,21 @@ class AzurePronunciationEvaluator:
         """Swap in a fresh queue without recreating recognizer."""
         if not self.realtime:
             return
+        old_q = getattr(self, "audio_queue", None)
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
-        self._feed_thread = None
+        self.bytes_pushed = 0
+        if self._feed_thread is not None and self._feed_thread.is_alive():
+            try:
+                if old_q is not None:
+                    old_q.put_nowait(None)
+            except Exception:
+                pass
+            self._feed_thread.join()
+            self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
+            self._feed_thread.start()
+        else:
+            self._feed_thread = None
 
     def process_file(self, wav_path: str):
         """Run pronunciation assessment on a saved WAV."""
@@ -354,7 +366,7 @@ class AzurePlainTranscriber:
         self.sample_rate = sample_rate
         self._push_stream = None
         self._feed_thread = None
-        self._bytes_written = 0
+        self.bytes_pushed = 0
         self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
 
         if self.realtime and self.audio_queue is not None:
@@ -400,7 +412,7 @@ class AzurePlainTranscriber:
                 break
             try:
                 data = pcm.tobytes()
-                self._bytes_written += len(data)
+                self.bytes_pushed += len(data)
                 self._push_stream.write(data)
             except Exception:
                 break
@@ -435,7 +447,7 @@ class AzurePlainTranscriber:
         if not self.realtime or self._running:
             return
         self._running = True
-        self._bytes_written = 0
+        self.bytes_pushed = 0
         self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
         console.print(Panel.fit("▶ [bold blue]Azure PlainTranscriber listening…[/bold blue]", border_style="blue"))
         if self.audio_queue is not None:
@@ -454,7 +466,7 @@ class AzurePlainTranscriber:
         self.recognizer.stop_continuous_recognition()
         self._done_event.wait(timeout=timeout)
         console.log(
-            f"[Azure Plain] bytes written={self._bytes_written}; events={self._event_counts}"
+            f"[Azure Plain] bytes pushed={self.bytes_pushed}; events={self._event_counts}"
         )
         console.print("[red]■ Azure Plain stopped.[/red]\n")
 
@@ -482,6 +494,18 @@ class AzurePlainTranscriber:
         """Install a new queue for the next recording."""
         if not self.realtime:
             return
+        old_q = getattr(self, "audio_queue", None)
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
-        self._feed_thread = None
+        self.bytes_pushed = 0
+        if self._feed_thread is not None and self._feed_thread.is_alive():
+            try:
+                if old_q is not None:
+                    old_q.put_nowait(None)
+            except Exception:
+                pass
+            self._feed_thread.join()
+            self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
+            self._feed_thread.start()
+        else:
+            self._feed_thread = None

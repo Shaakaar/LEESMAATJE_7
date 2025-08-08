@@ -85,11 +85,9 @@ class RealtimeSession:
         self.azure_plain_q = queue.Queue() if config.AZURE_PUSH_STREAM and rt.get("azure_plain", True) else None
 
         if getattr(self, "phon_thread", None) is not None:
-            self.phon_thread.audio_q = self.phon_q
-            self.phon_thread.buffer = np.zeros((0,), dtype=np.int16)
+            self.phon_thread.on_new_recording(self.phon_q)
         if getattr(self, "asr_thread", None) is not None:
-            self.asr_thread.audio_q = self.asr_q
-            self.asr_thread.buffer = np.zeros((0,), dtype=np.int16)
+            self.asr_thread.on_new_recording(self.asr_q)
         if getattr(self, "azure_pron", None) is not None and self.azure_pron_q is not None:
             self.azure_pron.reset_stream(self.azure_pron_q, self.sample_rate)
         if getattr(self, "azure_plain", None) is not None and self.azure_plain_q is not None:
@@ -118,6 +116,15 @@ class RealtimeSession:
                 },
             }
         )
+
+        if getattr(self, "phon_thread", None) is not None:
+            self.phon_thread.results = self.results
+        if getattr(self, "asr_thread", None) is not None:
+            self.asr_thread.results = self.results
+        if getattr(self, "azure_pron", None) is not None and self.azure_pron_q is not None:
+            self.azure_pron.results = self.results
+        if getattr(self, "azure_plain", None) is not None and self.azure_plain_q is not None:
+            self.azure_plain.results = self.results
 
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         self.wav_path = tmp.name
@@ -237,6 +244,11 @@ class RealtimeSession:
             self.azure_pron_q.put(None)
         if self.azure_plain_q is not None:
             self.azure_plain_q.put(None)
+
+        if getattr(self, "phon_thread", None) is not None and self.phon_thread.realtime:
+            self.phon_thread.eor_event.wait()
+        if getattr(self, "asr_thread", None) is not None and self.asr_thread.realtime:
+            self.asr_thread.eor_event.wait()
 
         self.wavefile.close()
 
