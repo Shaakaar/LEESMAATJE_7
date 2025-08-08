@@ -69,6 +69,40 @@ sent_index = 0
 models_ready = False
 
 
+def _print_timeline(results: dict) -> None:
+    """Print backend and frontend timing deltas if present."""
+
+    def _delta(tl: dict, a: str, b: str) -> float | None:
+        return tl[b] - tl[a] if a in tl and b in tl else None
+
+    tb = results.get("timeline_backend", {})
+    tf = results.get("timeline_frontend", {})
+
+    print("Backend timings (ms):")
+    for a, b, label in [
+        ("/start_in", "engine_reset_done", "engine reset"),
+        ("azure_start_called", "azure_session_started", "azure handshake"),
+        ("first_chunk_received", "azure_first_write", "azure first write"),
+        ("w2v2_ready_ph", "w2v2_first_decode", "w2v2 first decode"),
+        ("/stop_in", "json_ready", "/stop roundtrip"),
+    ]:
+        d = _delta(tb, a, b)
+        if d is not None:
+            print(f"  {label}: {d:.1f} ms")
+
+    print("\nFrontend timings (ms):")
+    for a, b, label in [
+        ("ui_click", "start_req_sent", "click to /start"),
+        ("start_req_sent", "start_resp_ok", "/start roundtrip"),
+        ("mic_ready", "worklet_loaded", "mic to worklet"),
+        ("processor_ready", "first_chunk_captured", "processor ready"),
+        ("first_chunk_captured", "first_chunk_sent", "capture to send"),
+    ]:
+        d = _delta(tf, a, b)
+        if d is not None:
+            print(f"  {label}: {d:.1f} ms")
+
+
 @app.post("/api/register")
 async def register(username: str = Form(...), password: str = Form(...)):
     try:
@@ -350,6 +384,7 @@ async def realtime_stop(sid: str, request: Request):
     if sess.timeline:
         sess.timeline.mark("json_ready")
         results["timeline_backend"] = sess.timeline.to_dict()
+    _print_timeline(results)
     req, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
     from .tts import tts_to_file
