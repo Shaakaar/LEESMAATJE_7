@@ -55,7 +55,6 @@ class RealtimeSession:
             teacher_id=teacher_id,
             student_id=student_id,
         )
-        self._init_engines()
 
     # ------------------------------------------------------------------ lifecycle
     def reset(
@@ -68,6 +67,9 @@ class RealtimeSession:
         student_id: int = 0,
     ) -> None:
         """Prepare the session for a new recording."""
+        console.log(
+            f"[reset] ASR thread alive before reset? {getattr(self, 'asr_thread', None) is not None and self.asr_thread.is_alive()}"
+        )
         self.id = str(uuid.uuid4())
         self.last_used = time.time()
         self.sentence = sentence
@@ -90,12 +92,8 @@ class RealtimeSession:
             self.asr_thread.buffer = np.zeros((0,), dtype=np.int16)
         if getattr(self, "azure_pron", None) is not None and self.azure_pron_q is not None:
             self.azure_pron.reset_stream(self.azure_pron_q, self.sample_rate)
-            if self.azure_pron.realtime:
-                self.azure_pron.start()
         if getattr(self, "azure_plain", None) is not None and self.azure_plain_q is not None:
             self.azure_plain.reset_stream(self.azure_plain_q, self.sample_rate)
-            if self.azure_plain.realtime:
-                self.azure_plain.start()
 
         self.results.clear()
         self.results.update(
@@ -132,6 +130,11 @@ class RealtimeSession:
 
         if getattr(self, "azure_pron", None) is not None:
             self.azure_pron.update_reference_text(sentence)
+
+        self._init_engines()
+        console.log(
+            f"[reset] ASR thread alive after init? {getattr(self, 'asr_thread', None) is not None and self.asr_thread.is_alive()}"
+        )
 
     def _init_engines(self) -> None:
         """Create or restart recogniser engines."""
