@@ -283,11 +283,6 @@ class Wav2Vec2Transcriber(threading.Thread):
         self.model.eval()
         console.print("[cyan]✅  Model loaded and ready.[/cyan]\n")
 
-    def reset_queue(self, new_queue: queue.Queue) -> None:
-        """Install a fresh audio queue and clear the internal buffer."""
-        self.audio_q = new_queue
-        self.buffer = np.zeros((0,), dtype=np.int16)
-
     def run(self):
         if not self.realtime:
             return
