@@ -72,6 +72,7 @@ class AzurePronunciationEvaluator:
         self._push_stream = None
         self.bytes_pushed = 0
         self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
+        self._handlers_attached = False
 
         speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
         speech_config.speech_recognition_language = "nl-NL"
@@ -111,17 +112,8 @@ class AzurePronunciationEvaluator:
             phrase_list = speechsdk.PhraseListGrammar.from_recognizer(self.recognizer)
             phrase_list.addPhrase(self.reference_text)
 
-            # ── Event handlers
-            self.recognizer.recognizing.connect(self._on_interim)
-            self.recognizer.recognized.connect(self._on_final)
-            self.recognizer.canceled.connect(self._on_canceled)
-
         # ── Event-based “done” flag
         self._done_event = threading.Event()
-        if self.realtime:
-            self.recognizer.session_stopped.connect(lambda _: self._done_event.set())
-            self.recognizer.canceled.connect(lambda _: self._done_event.set())
-
         self._running = False
 
         # Shared results dict
@@ -132,6 +124,9 @@ class AzurePronunciationEvaluator:
                 "word_timings": [],
                 "pronunciation_scores": {}
             }
+
+        if self.timeline is not None and "azure_constructed" not in getattr(self.timeline, "_marks", {}):
+            self.timeline.mark("azure_constructed")
 
     # ------------------------------------------------------------------ internal
     def _feed_audio(self):
@@ -154,8 +149,8 @@ class AzurePronunciationEvaluator:
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
         self._event_counts["recognizing"] += 1
-        if self.timeline is not None and "azure_session_started" not in getattr(self.timeline, "_marks", {}):
-            self.timeline.mark("azure_session_started")
+        if self.timeline is not None and "azure_handshake_first_event" not in getattr(self.timeline, "_marks", {}):
+            self.timeline.mark("azure_handshake_first_event")
         console.print(f"[yellow][Azure Pron interim][/yellow] {evt.result.text}", end="\r")
 
     def _on_final(self, evt):
@@ -210,39 +205,53 @@ class AzurePronunciationEvaluator:
 
     def _on_canceled(self, evt):
         self._event_counts["canceled"] += 1
+        self._running = False
 
     # ------------------------------------------------------------------ control
-    def start(self):
+    def _attach_handlers_once(self):
+        if self._handlers_attached or not self.realtime:
+            return
+        self.recognizer.recognizing.connect(self._on_interim)
+        self.recognizer.recognized.connect(self._on_final)
+        self.recognizer.canceled.connect(self._on_canceled)
+        self.recognizer.session_stopped.connect(lambda _: self._done_event.set())
+        self.recognizer.canceled.connect(lambda _: self._done_event.set())
+        self._handlers_attached = True
+
+    def start_if_needed(self):
+        """Start continuous recognition if not already running."""
         if not self.realtime or self._running:
             return
+        self._attach_handlers_once()
+        self.recognizer.start_continuous_recognition()
         self._running = True
-        self.bytes_pushed = 0
-        self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
-        console.print(
-            Panel.fit(
-                f"▶ [bold green]Azure PronunciationEvaluator[/bold green] listening…\n   “[cyan]{self.reference_text}[/cyan]”",
-                border_style="green"
-            )
-        )
-        if self.audio_queue is not None:
+
+    def stop_if_needed(self):
+        """Stop continuous recognition if running."""
+        if not self.realtime or not self._running:
+            return
+        self.recognizer.stop_continuous_recognition()
+        self._running = False
+
+    def start(self):
+        if not self.realtime:
+            return
+        if self.audio_queue is not None and (self._feed_thread is None or not self._feed_thread.is_alive()):
             self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
             console.log("[Azure Pron] feed thread started")
-        self.recognizer.start_continuous_recognition()
+        self.start_if_needed()
 
     def stop(self, timeout: float | None = None):
-        if not self.realtime or not self._running:
+        if not self.realtime:
             return
-        self._running = False
-        console.print("[red]■ Stopping Azure Pron…[/red]")
         if self._feed_thread is not None:
             self._feed_thread.join()
-        self.recognizer.stop_continuous_recognition()
+        self.stop_if_needed()
         self._done_event.wait(timeout=timeout)
         console.log(
             f"[Azure Pron] bytes pushed={self.bytes_pushed}; events={self._event_counts}"
         )
-        console.print("[red]■ Azure Pron stopped.[/red]\n")
 
     def update_reference_text(self, text: str):
         """Replace the reference sentence used for pronunciation scoring."""
@@ -274,6 +283,7 @@ class AzurePronunciationEvaluator:
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
         self.bytes_pushed = 0
+        self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
         if self._feed_thread is not None and self._feed_thread.is_alive():
             try:
                 if old_q is not None:
@@ -281,10 +291,9 @@ class AzurePronunciationEvaluator:
             except Exception:
                 pass
             self._feed_thread.join()
+        if self.audio_queue is not None:
             self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
-        else:
-            self._feed_thread = None
 
     def process_file(self, wav_path: str):
         """Run pronunciation assessment on a saved WAV."""
@@ -376,6 +385,7 @@ class AzurePlainTranscriber:
         self._feed_thread = None
         self.bytes_pushed = 0
         self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
+        self._handlers_attached = False
 
         if self.realtime and self.audio_queue is not None:
             fmt = speechsdk.audio.AudioStreamFormat(
@@ -393,15 +403,8 @@ class AzurePlainTranscriber:
                 speech_config=self.speech_config,
                 audio_config=audio_config
             )
-            self.recognizer.recognizing.connect(self._on_interim)
-            self.recognizer.recognized.connect(self._on_final)
-            self.recognizer.canceled.connect(self._on_canceled)
 
         self._done_event = threading.Event()
-        if self.realtime:
-            self.recognizer.session_stopped.connect(lambda _: self._done_event.set())
-            self.recognizer.canceled.connect(lambda _: self._done_event.set())
-
         self._running = False
         self.results = results
         if self.results is not None:
@@ -409,6 +412,9 @@ class AzurePlainTranscriber:
                 "final_transcript": None,
                 "interim_transcripts": []
             }
+
+        if self.timeline is not None and "azure_constructed" not in getattr(self.timeline, "_marks", {}):
+            self.timeline.mark("azure_constructed")
 
     # ------------------------------------------------------------------ internal
     def _feed_audio(self):
@@ -430,8 +436,8 @@ class AzurePlainTranscriber:
     # ------------------------------------------------------------------ callbacks
     def _on_interim(self, evt):
         self._event_counts["recognizing"] += 1
-        if self.timeline is not None and "azure_session_started" not in getattr(self.timeline, "_marks", {}):
-            self.timeline.mark("azure_session_started")
+        if self.timeline is not None and "azure_handshake_first_event" not in getattr(self.timeline, "_marks", {}):
+            self.timeline.mark("azure_handshake_first_event")
         txt = evt.result.text
         console.print(f"[blue][Azure Plain interim][/blue] {txt}", end="\r")
         if self.results is not None:
@@ -453,34 +459,53 @@ class AzurePlainTranscriber:
 
     def _on_canceled(self, evt):
         self._event_counts["canceled"] += 1
+        self._running = False
 
     # ------------------------------------------------------------------ control
-    def start(self):
+    def _attach_handlers_once(self):
+        if self._handlers_attached or not self.realtime:
+            return
+        self.recognizer.recognizing.connect(self._on_interim)
+        self.recognizer.recognized.connect(self._on_final)
+        self.recognizer.canceled.connect(self._on_canceled)
+        self.recognizer.session_stopped.connect(lambda _: self._done_event.set())
+        self.recognizer.canceled.connect(lambda _: self._done_event.set())
+        self._handlers_attached = True
+
+    def start_if_needed(self):
+        """Start continuous recognition if not already running."""
         if not self.realtime or self._running:
             return
+        self._attach_handlers_once()
+        self.recognizer.start_continuous_recognition()
         self._running = True
-        self.bytes_pushed = 0
-        self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
-        console.print(Panel.fit("▶ [bold blue]Azure PlainTranscriber listening…[/bold blue]", border_style="blue"))
-        if self.audio_queue is not None:
+
+    def stop_if_needed(self):
+        """Stop continuous recognition if running."""
+        if not self.realtime or not self._running:
+            return
+        self.recognizer.stop_continuous_recognition()
+        self._running = False
+
+    def start(self):
+        if not self.realtime:
+            return
+        if self.audio_queue is not None and (self._feed_thread is None or not self._feed_thread.is_alive()):
             self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
             console.log("[Azure Plain] feed thread started")
-        self.recognizer.start_continuous_recognition()
+        self.start_if_needed()
 
     def stop(self, timeout: float | None = None):
-        if not self.realtime or not self._running:
+        if not self.realtime:
             return
-        self._running = False
-        console.print("[red]■ Stopping Azure Plain…[/red]")
         if self._feed_thread is not None:
             self._feed_thread.join()
-        self.recognizer.stop_continuous_recognition()
+        self.stop_if_needed()
         self._done_event.wait(timeout=timeout)
         console.log(
             f"[Azure Plain] bytes pushed={self.bytes_pushed}; events={self._event_counts}"
         )
-        console.print("[red]■ Azure Plain stopped.[/red]\n")
 
     def process_file(self, wav_path: str):
         """Transcribe a saved WAV using Azure."""
@@ -510,6 +535,7 @@ class AzurePlainTranscriber:
         self.audio_queue = audio_queue
         self.sample_rate = sample_rate
         self.bytes_pushed = 0
+        self._event_counts = {"recognizing": 0, "recognized": 0, "canceled": 0}
         if self._feed_thread is not None and self._feed_thread.is_alive():
             try:
                 if old_q is not None:
@@ -517,7 +543,6 @@ class AzurePlainTranscriber:
             except Exception:
                 pass
             self._feed_thread.join()
+        if self.audio_queue is not None:
             self._feed_thread = threading.Thread(target=self._feed_audio, daemon=True)
             self._feed_thread.start()
-        else:
-            self._feed_thread = None
