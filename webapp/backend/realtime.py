@@ -70,6 +70,7 @@ class RealtimeSession:
         self.azure_plain_q = None
 
         self.results: Dict[str, Any] = {}
+        self._prompt_dump = None
         self.reset(
             sentence,
             sample_rate=sample_rate,
@@ -355,13 +356,20 @@ class RealtimeSession:
         if self.azure_plain:
             self.azure_plain.end_turn()
 
-        console.log(f"wrote {self.chunk_count} chunks totalling {os.path.getsize(self.wav_path)} bytes")
+        console.log(
+            f"wrote {self.chunk_count} chunks totalling {os.path.getsize(self.wav_path)} bytes"
+        )
         self.results["end_time"] = time.time()
         self.last_used = self.results["end_time"]
+
         req, messages = prompt_builder.build(self.results, state={})
-        console.rule("[bold green]System Prompt[/bold green]")
-        console.print(messages[0]["content"])
+
+        # Build once, but do not print here.
         json_str = req.model_dump_json(indent=2)
-        console.rule("[bold green]JSON Request[/bold green]")
-        console.print_json(json_str)
+
+        # Only stash if debug is requested (don’t bloat memory by default)
+        self._prompt_dump = None
+        if os.getenv("DEBUG_PROMPT", "0") == "1":
+            self._prompt_dump = (messages[0]["content"], json_str)
+
         return self.results
