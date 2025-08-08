@@ -190,13 +190,17 @@ class RealtimeSession:
         return time.time() - self.last_used
 
     def shutdown(self) -> None:
-        """Attempt to cleanly stop all running engines."""
+        """Terminate all recogniser threads and wait for them to finish."""
         try:
-            self.phon_thread.stop()
+            if getattr(self, "phon_thread", None) is not None:
+                self.phon_thread.terminate()
+                self.phon_thread.join()
         except Exception:
             pass
         try:
-            self.asr_thread.stop()
+            if getattr(self, "asr_thread", None) is not None:
+                self.asr_thread.terminate()
+                self.asr_thread.join()
         except Exception:
             pass
         try:
@@ -225,22 +229,22 @@ class RealtimeSession:
 
     def stop(self) -> Dict[str, Any]:
         """Finalize processing and return results."""
+        # Mark end of the current recording for each engine.  The W2V2 threads
+        # remain alive, so we only enqueue ``None`` to signal a boundary.
         self.phon_q.put(None)
         self.asr_q.put(None)
         if self.azure_pron_q is not None:
             self.azure_pron_q.put(None)
         if self.azure_plain_q is not None:
             self.azure_plain_q.put(None)
+
         self.wavefile.close()
 
-        if self.phon_thread.realtime:
-            self.phon_thread.join()
-        else:
+        # Offline modes still run synchronously on the recorded file.
+        if not self.phon_thread.realtime:
             self.phon_thread.process_file(self.wav_path)
 
-        if self.asr_thread.realtime:
-            self.asr_thread.join()
-        else:
+        if not self.asr_thread.realtime:
             self.asr_thread.process_file(self.wav_path)
 
         if self.azure_pron.realtime:

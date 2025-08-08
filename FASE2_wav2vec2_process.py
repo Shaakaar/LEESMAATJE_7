@@ -55,7 +55,9 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         self.chunk_duration = chunk_duration
         self.chunk_size = int(sample_rate * chunk_duration)
         self.buffer = np.zeros((0,), dtype=np.int16)
-        self.running = True
+        # shutdown flag allows thread to run across recordings and only exit
+        # when ``terminate`` is called.
+        self._shutdown = False
         self.audio_q = audio_queue
 
         # Reference to shared results dict:
@@ -86,13 +88,17 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         )
 
         # ─────────────── Phase 1: Normal processing ───────────────
-        while self.running:
+        while not self._shutdown:
             try:
                 pcm_frames = self.audio_q.get(timeout=1.0)
                 if pcm_frames is None:
+                    # Treat ``None`` as a boundary between recordings. Flush
+                    # any buffered audio and reset so the thread can continue
+                    # for the next recording.
                     if self.buffer.size:
                         self._process_final_chunk()
-                    break
+                    self.buffer = np.zeros((0,), dtype=np.int16)
+                    continue
             except queue.Empty:
                 continue
             self.buffer = np.concatenate((self.buffer, pcm_frames), axis=0)
@@ -193,16 +199,19 @@ class Wav2Vec2PhonemeExtractor(threading.Thread):
         )
         self.buffer = np.zeros((0,), dtype=np.int16)
 
-    def stop(self):
-        self.running = False
+    def terminate(self) -> None:
+        """Signal the thread to exit after the current recording."""
+        self._shutdown = True
         try:
+            # Wake the thread if it is waiting on the queue.
             self.audio_q.put_nowait(None)
         except Exception:
             pass
-        try:
-            self.audio_q.put_nowait(None)
-        except Exception:
-            pass
+
+    # Backwards compatibility – ``stop`` used to stop the thread.  Now it
+    # simply forwards to :py:meth:`terminate`.
+    def stop(self) -> None:  # pragma: no cover - legacy API
+        self.terminate()
 
     # ------------------------------------------------------------------ offline
     def process_file(self, wav_path: str):
@@ -267,7 +276,7 @@ class Wav2Vec2Transcriber(threading.Thread):
         self.chunk_duration = chunk_duration
         self.chunk_size = int(sample_rate * chunk_duration)
         self.buffer = np.zeros((0,), dtype=np.int16)
-        self.running = True
+        self._shutdown = False
         self.audio_q = audio_queue
 
         self.results = results
@@ -298,13 +307,14 @@ class Wav2Vec2Transcriber(threading.Thread):
         )
 
         # ─────────────── Phase 1: Normal processing ───────────────
-        while self.running:
+        while not self._shutdown:
             try:
                 pcm_frames = self.audio_q.get(timeout=1.0)
                 if pcm_frames is None:
                     if self.buffer.size:
                         self._process_final_chunk()
-                    break
+                    self.buffer = np.zeros((0,), dtype=np.int16)
+                    continue
             except queue.Empty:
                 continue
 
@@ -398,8 +408,16 @@ class Wav2Vec2Transcriber(threading.Thread):
         )
         self.buffer = np.zeros((0,), dtype=np.int16)
 
-    def stop(self):
-        self.running = False
+    def terminate(self) -> None:
+        """Signal the thread to exit after the current recording."""
+        self._shutdown = True
+        try:
+            self.audio_q.put_nowait(None)
+        except Exception:
+            pass
+
+    def stop(self) -> None:  # pragma: no cover - legacy API
+        self.terminate()
 
     # ------------------------------------------------------------------ offline
     def process_file(self, wav_path: str):
