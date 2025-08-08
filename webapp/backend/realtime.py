@@ -142,12 +142,16 @@ class RealtimeSession:
         self._init_engines()
 
         if self.azure_pron is not None and self.azure_pron_q is not None:
-            self.azure_pron.results = self.results
             self.azure_pron.update_reference_text(sentence)
             self.azure_pron.reset_stream(self.azure_pron_q, self.sample_rate)
         if self.azure_plain is not None and self.azure_plain_q is not None:
-            self.azure_plain.results = self.results
             self.azure_plain.reset_stream(self.azure_plain_q, self.sample_rate)
+
+        sid = self.results["session_id"]
+        if self.azure_pron:
+            self.azure_pron.begin_turn(sid, self.results)
+        if self.azure_plain:
+            self.azure_plain.begin_turn(sid, self.results)
 
         if getattr(self, "phon_thread", None) is not None:
             self.phon_thread.results = self.results
@@ -328,19 +332,28 @@ class RealtimeSession:
         if self.azure_plain and self.azure_plain._feed_thread:
             self.azure_plain._feed_thread.join()
 
+        got_pron = True
+        got_plain = True
         if self.azure_pron.realtime:
-            if not config.KEEP_AZURE_RUNNING:
-                self.azure_pron.stop_if_needed()
-                self.azure_pron._done_event.wait()
+            got_pron = self.azure_pron.wait_for_final(timeout=1.0)
         else:
             self.azure_pron.process_file(self.wav_path)
-
         if self.azure_plain.realtime:
-            if not config.KEEP_AZURE_RUNNING:
-                self.azure_plain.stop_if_needed()
-                self.azure_plain._done_event.wait()
+            got_plain = self.azure_plain.wait_for_final(timeout=1.0)
         else:
             self.azure_plain.process_file(self.wav_path)
+
+        if self.azure_pron.realtime and not got_pron:
+            self.azure_pron.stop_if_needed()
+            self.azure_pron._done_event.wait(timeout=1.0)
+        if self.azure_plain.realtime and not got_plain:
+            self.azure_plain.stop_if_needed()
+            self.azure_plain._done_event.wait(timeout=1.0)
+
+        if self.azure_pron:
+            self.azure_pron.end_turn()
+        if self.azure_plain:
+            self.azure_plain.end_turn()
 
         console.log(f"wrote {self.chunk_count} chunks totalling {os.path.getsize(self.wav_path)} bytes")
         self.results["end_time"] = time.time()
