@@ -81,7 +81,8 @@ def _print_timeline(results: dict) -> None:
     print("Backend timings (ms):")
     for a, b, label in [
         ("/start_in", "engine_reset_done", "engine reset"),
-        ("azure_start_called", "azure_session_started", "azure handshake"),
+        ("azure_start_called", "azure_start_returned", "azure start call"),
+        ("azure_start_called", "azure_handshake_first_event", "azure handshake"),
         ("first_chunk_received", "azure_first_write", "azure first write"),
         ("w2v2_ready_ph", "w2v2_first_decode", "w2v2 first decode"),
         ("/stop_in", "json_ready", "/stop roundtrip"),

@@ -67,6 +67,9 @@ CHUNK_DURATION = 10
 # RecorderPipeline and RealtimeSession.
 AZURE_PUSH_STREAM = True
 
+# Keep Azure recognisers alive between recordings and start them asynchronously
+KEEP_AZURE_RUNNING = True
+
 # GPT model settings
 GPT_PROVIDER = os.getenv("GPT_TUTOR_PROVIDER", "openai")
 GPT_MODEL = os.getenv("GPT_TUTOR_MODEL", "gpt-4o-mini")

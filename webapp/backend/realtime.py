@@ -5,6 +5,7 @@ import tempfile
 import time
 import json
 import queue
+import threading
 from time import perf_counter_ns
 from typing import Dict, Any
 
@@ -113,10 +114,6 @@ class RealtimeSession:
             self.phon_thread.on_new_recording(self.phon_q)
         if getattr(self, "asr_thread", None) is not None:
             self.asr_thread.on_new_recording(self.asr_q)
-        if getattr(self, "azure_pron", None) is not None and self.azure_pron_q is not None:
-            self.azure_pron.reset_stream(self.azure_pron_q, self.sample_rate)
-        if getattr(self, "azure_plain", None) is not None and self.azure_plain_q is not None:
-            self.azure_plain.reset_stream(self.azure_plain_q, self.sample_rate)
 
         self.results.clear()
         self.results.update(
@@ -142,14 +139,20 @@ class RealtimeSession:
             }
         )
 
+        self._init_engines()
+
+        if self.azure_pron is not None and self.azure_pron_q is not None:
+            self.azure_pron.results = self.results
+            self.azure_pron.update_reference_text(sentence)
+            self.azure_pron.reset_stream(self.azure_pron_q, self.sample_rate)
+        if self.azure_plain is not None and self.azure_plain_q is not None:
+            self.azure_plain.results = self.results
+            self.azure_plain.reset_stream(self.azure_plain_q, self.sample_rate)
+
         if getattr(self, "phon_thread", None) is not None:
             self.phon_thread.results = self.results
         if getattr(self, "asr_thread", None) is not None:
             self.asr_thread.results = self.results
-        if getattr(self, "azure_pron", None) is not None and self.azure_pron_q is not None:
-            self.azure_pron.results = self.results
-        if getattr(self, "azure_plain", None) is not None and self.azure_plain_q is not None:
-            self.azure_plain.results = self.results
 
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         self.wav_path = tmp.name
@@ -160,10 +163,18 @@ class RealtimeSession:
         self.wavefile.setframerate(self.sample_rate)
         self.chunk_count = 0
 
-        if getattr(self, "azure_pron", None) is not None:
-            self.azure_pron.update_reference_text(sentence)
+        if config.KEEP_AZURE_RUNNING:
+            if (
+                (self.azure_pron and not self.azure_pron._running)
+                or (self.azure_plain and not self.azure_plain._running)
+            ):
+                self._ensure_azure_running_async()
+        else:
+            if self.azure_pron:
+                self.azure_pron.start_if_needed()
+            if self.azure_plain:
+                self.azure_plain.start_if_needed()
 
-        self._init_engines()
         console.log(
             f"[reset] ASR thread alive after init? {getattr(self, 'asr_thread', None) is not None and self.asr_thread.is_alive()}"
         )
@@ -208,7 +219,6 @@ class RealtimeSession:
             if self.timeline:
                 self.timeline.mark("w2v2_ready_asr")
 
-        azure_started = False
         if self.azure_pron_q is not None:
             if getattr(self, "azure_pron", None) is None:
                 self.azure_pron = AzurePronunciationEvaluator(
@@ -219,9 +229,6 @@ class RealtimeSession:
                     sample_rate=self.sample_rate,
                     timeline=self.timeline,
                 )
-            if self.azure_pron.realtime and not getattr(self.azure_pron, "_running", False):
-                self.azure_pron.start()
-                azure_started = True
 
         if self.azure_plain_q is not None:
             if getattr(self, "azure_plain", None) is None:
@@ -232,13 +239,20 @@ class RealtimeSession:
                     sample_rate=self.sample_rate,
                     timeline=self.timeline,
                 )
-            if self.azure_plain.realtime and not getattr(self.azure_plain, "_running", False):
-                self.azure_plain.start()
-                azure_started = True
 
-        if azure_started and self.timeline:
-            if "azure_start_called" not in self.timeline._marks:
+    def _ensure_azure_running_async(self) -> None:
+        def _run():
+            if self.timeline:
                 self.timeline.mark("azure_start_called")
+            try:
+                if self.azure_pron:
+                    self.azure_pron.start_if_needed()
+                if self.azure_plain:
+                    self.azure_plain.start_if_needed()
+            finally:
+                if self.timeline:
+                    self.timeline.mark("azure_start_returned")
+        threading.Thread(target=_run, daemon=True, name="azure-start").start()
 
     @property
     def idle_seconds(self) -> float:
@@ -309,13 +323,22 @@ class RealtimeSession:
         if not self.asr_thread.realtime:
             self.asr_thread.process_file(self.wav_path)
 
+        if self.azure_pron and self.azure_pron._feed_thread:
+            self.azure_pron._feed_thread.join()
+        if self.azure_plain and self.azure_plain._feed_thread:
+            self.azure_plain._feed_thread.join()
+
         if self.azure_pron.realtime:
-            self.azure_pron.stop()
+            if not config.KEEP_AZURE_RUNNING:
+                self.azure_pron.stop_if_needed()
+                self.azure_pron._done_event.wait()
         else:
             self.azure_pron.process_file(self.wav_path)
 
         if self.azure_plain.realtime:
-            self.azure_plain.stop()
+            if not config.KEEP_AZURE_RUNNING:
+                self.azure_plain.stop_if_needed()
+                self.azure_plain._done_event.wait()
         else:
             self.azure_plain.process_file(self.wav_path)
 
