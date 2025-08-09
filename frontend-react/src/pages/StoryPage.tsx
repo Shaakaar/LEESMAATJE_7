@@ -85,16 +85,24 @@ export default function StoryPage() {
   }, [feedback]);
 
   const highlights: Highlights = useMemo(() => {
-    if (!feedback?.errors || !currentItem || currentItem.type !== 'sentence')
-      return {};
-    const ref = currentItem.text.replace(/[.!?;:]/g, '').toLowerCase();
-    const tokens = ref.split(/\s+/);
+    if (!feedback?.errors || !currentItem || currentItem.type !== 'sentence') return {};
+
+    // Split the *displayed* text the same way SentenceDisplay does
+    const words = currentItem.text.split(/\s+/);
+
+    // Normalize words for matching (strip punctuation, lowercase)
+    const norm = (s: string) => s.replace(/[^\p{L}\p{N}']/gu, '').toLowerCase();
+
     const bad = new Set(
-      feedback.errors.map((e) => e.expected_word?.toLowerCase?.() || ''),
+      feedback.errors
+        .map((e) => (e.expected_word ?? '').toString())
+        .map(norm)
+        .filter(Boolean),
     );
+
     const map: Highlights = {};
-    tokens.forEach((w, i) => {
-      if (bad.has(w)) map[i] = 'error';
+    words.forEach((w, i) => {
+      if (bad.has(norm(w))) map[i] = 'error';
     });
     return map;
   }, [feedback, currentItem]);
