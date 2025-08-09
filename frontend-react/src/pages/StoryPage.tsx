@@ -85,8 +85,9 @@ export default function StoryPage() {
   }, [feedback]);
 
   const highlights: Highlights = useMemo(() => {
-    if (!feedback?.errors || !currentItem || currentItem.type !== 'sentence') return {};
-    const ref = currentItem.text.replace(/[.,!?;:]/g, '').toLowerCase();
+    if (!feedback?.errors || !currentItem || currentItem.type !== 'sentence')
+      return {};
+    const ref = currentItem.text.replace(/[.!?;:]/g, '').toLowerCase();
     const tokens = ref.split(/\s+/);
     const bad = new Set(
       feedback.errors.map((e) => e.expected_word?.toLowerCase?.() || ''),
