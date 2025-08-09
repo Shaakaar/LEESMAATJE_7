@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { RingBufferInt16 } from "../utils/ringBuffer";
+import { RingBuffer } from "../utils/ringBuffer";
 
 const SEND_INTERVAL_MS = 100; // how often to upload audio (in ms)
 const DEBUG = false; // set true to enable chunk logs
 const PCM_QUEUE: Int16Array[] = [];
 let lastSend = 0;
-const PRELOAD_MS = Number(import.meta.env.VITE_RECORDING_PRELOAD_MS) || 2000;
+const PRE_ROLL_SEC = 1.5;
 
 const FILLER_AUDIO = "de_zin_was.wav";
 
@@ -39,7 +39,7 @@ export function useRecorder({
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const sampleRateRef = useRef<number>(0);
+  const sampleRateRef = useRef<number | null>(null);
   const processorRef = useRef<AudioWorkletNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -50,8 +50,16 @@ export function useRecorder({
   const rafRef = useRef<number | null>(null);
   const realtimeRef = useRef(true);
   const timelineRef = useRef<Record<string, number>>({});
-  const ringRef = useRef<RingBufferInt16 | null>(null);
+  const ringRef = useRef<RingBuffer | null>(null);
   const backendReadyRef = useRef(false);
+
+  function ensureRing(sampleRate: number) {
+    const cap = Math.max(1, Math.round(sampleRate * PRE_ROLL_SEC));
+    if (!ringRef.current || ringRef.current.capacity !== cap) {
+      ringRef.current = new RingBuffer(cap);
+    }
+    return ringRef.current;
+  }
 
   // Fetch runtime config (realtime flag) once
   useEffect(() => {
@@ -115,11 +123,11 @@ export function useRecorder({
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
     sampleRateRef.current = audioCtx.sampleRate;
+    const ring = ensureRing(sampleRateRef.current);
+    timelineRef.current.ring_capacity_samples = ring.capacity;
     lastSend = 0;
 
     if (realtimeRef.current) {
-      const cap = Math.floor((audioCtx.sampleRate * PRELOAD_MS) / 1000);
-      ringRef.current = new RingBufferInt16(cap);
       backendReadyRef.current = false;
       const fd = new FormData();
       fd.append("sentence", sentence);
@@ -139,9 +147,12 @@ export function useRecorder({
           delayRef.current = j.delay_seconds;
           timelineRef.current.start_resp_ok = performance.now();
           backendReadyRef.current = true;
-          const preload = ringRef.current.drainAll();
-          const ms = (preload.length / audioCtx.sampleRate) * 1000;
-          timelineRef.current.ring_capacity_samples = ringRef.current.capacity;
+          const ring = ensureRing(sampleRateRef.current ?? audioCtx.sampleRate);
+          const preload = ring.drainAll();
+          const ms =
+            (preload.length / (sampleRateRef.current ?? audioCtx.sampleRate)) *
+            1000;
+          timelineRef.current.ring_capacity_samples = ring.capacity;
           timelineRef.current.ring_preload_samples_sent = preload.length;
           timelineRef.current.ring_preload_ms = ms;
           if (preload.length)
@@ -213,7 +224,9 @@ export function useRecorder({
       recordedChunksRef.current.push(pcm);
       if (!realtimeRef.current) return;
       if (!backendReadyRef.current) {
-        ringRef.current?.push(pcm);
+        const sr = sampleRateRef.current ?? 16000;
+        const ring = ensureRing(sr);
+        ring.write(pcm);
         return;
       }
       PCM_QUEUE.push(pcm);
@@ -256,7 +269,7 @@ export function useRecorder({
     drawWave(0);
     processorRef.current?.disconnect();
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    const sampleRate = sampleRateRef.current || 48000;
+    const sampleRate = sampleRateRef.current ?? 48000;
     await audioCtxRef.current?.close();
     audioCtxRef.current = null;
     setStatus("Analyseren");
