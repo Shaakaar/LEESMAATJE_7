@@ -9,12 +9,19 @@ const PRE_ROLL_SEC = 1.5;
 
 const FILLER_AUDIO = "de_zin_was.wav";
 
-export interface FeedbackData {
+export type TutorError = {
+  expected_word: string;
+  heard_word: string;
+  issue: 'mispronunciation' | 'vowel' | 'consonant' | 'omission' | 'insertion';
+};
+
+export type FeedbackData = {
   feedback_text: string;
-  feedback_audio: string;
-  errors?: { word?: string; expected_word?: string }[];
+  feedback_audio?: string;
   correct?: boolean;
-}
+  errors?: TutorError[];
+  reference_text?: string;
+};
 
 interface RecorderOptions {
   sentence: string;
@@ -52,6 +59,8 @@ export function useRecorder({
   const timelineRef = useRef<Record<string, number>>({});
   const ringRef = useRef<RingBuffer | null>(null);
   const backendReadyRef = useRef(false);
+  const uploadCtlRef = useRef<AbortController | null>(null);
+  const sentenceRef = useRef<string>('');
 
   function ensureRing(sampleRate: number) {
     const cap = Math.max(1, Math.round(sampleRate * PRE_ROLL_SEC));
@@ -71,16 +80,25 @@ export function useRecorder({
       .catch(() => {});
   }, []);
 
-  function sendChunk(blob: Blob) {
+  async function uploadChunk(blob: Blob) {
     if (!realtimeRef.current || !sessionIdRef.current) return;
+    const ctl = uploadCtlRef.current;
+    if (!ctl) return;
     const form = new FormData();
     form.append("file", blob, "chunk.pcm");
     if (!("first_chunk_sent" in timelineRef.current))
       timelineRef.current.first_chunk_sent = performance.now();
-    fetch(`/api/realtime/chunk/${sessionIdRef.current}`, {
-      method: "POST",
-      body: form,
-    });
+    try {
+      const res = await fetch(`/api/realtime/chunk/${sessionIdRef.current}`, {
+        method: "POST",
+        body: form,
+        signal: ctl.signal,
+      });
+      if (res.status === 404) return; // stale sid after stop
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("chunk upload failed", err);
+    }
   }
 
   function drawWave(level: number) {
@@ -118,6 +136,9 @@ export function useRecorder({
   async function startRecording() {
     console.log("startRecording");
     if (!sentence) return;
+    uploadCtlRef.current?.abort();
+    uploadCtlRef.current = new AbortController();
+    sentenceRef.current = sentence;
     timelineRef.current = {};
     timelineRef.current.ui_click = performance.now();
     const audioCtx = new AudioContext();
@@ -156,7 +177,9 @@ export function useRecorder({
           timelineRef.current.ring_preload_samples_sent = preload.length;
           timelineRef.current.ring_preload_ms = ms;
           if (preload.length)
-            sendChunk(new Blob([preload], { type: "application/octet-stream" }));
+            uploadChunk(
+              new Blob([preload], { type: "application/octet-stream" }),
+            );
           console.log(
             `Frontend: preload_sent_ms=${ms.toFixed(1)}, samples=${preload.length}`,
           );
@@ -246,7 +269,7 @@ export function useRecorder({
       const blob = new Blob([flat], { type: "application/octet-stream" });
       if (sessionIdRef.current && DEBUG)
         console.log("send chunk", blob.size, "bytes");
-      if (sessionIdRef.current) sendChunk(blob);
+      if (sessionIdRef.current) uploadChunk(blob);
     };
 
     recordedChunksRef.current = [];
@@ -283,8 +306,11 @@ export function useRecorder({
           pos += c.length;
         }
         PCM_QUEUE.length = 0;
-        sendChunk(new Blob([flat], { type: "application/octet-stream" }));
+        await uploadChunk(
+          new Blob([flat], { type: "application/octet-stream" }),
+        );
       }
+      uploadCtlRef.current?.abort();
       const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -330,7 +356,13 @@ export function useRecorder({
         const url = URL.createObjectURL(wav);
         setPlaybackUrl(url);
         const fb = new Audio("/api/audio/" + data.feedback_audio);
-        onFeedback(data);
+        onFeedback({
+          feedback_text: data.feedback_text,
+          feedback_audio: data.feedback_audio,
+          correct: data.correct,
+          errors: data.errors,
+          reference_text: sentenceRef.current,
+        });
         fb.onended = () => setStatus("");
         fb.play();
       }, delayRef.current * 1000);
@@ -378,7 +410,13 @@ export function useRecorder({
               a.play();
             });
           const fb = new Audio("/api/audio/" + data.feedback_audio);
-          onFeedback(data);
+          onFeedback({
+            feedback_text: data.feedback_text,
+            feedback_audio: data.feedback_audio,
+            correct: data.correct,
+            errors: data.errors,
+            reference_text: sentenceRef.current,
+          });
           fb.onended = () => setStatus("");
           fb.play();
         },
