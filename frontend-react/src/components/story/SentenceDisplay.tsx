@@ -15,18 +15,21 @@ interface DirectionItem {
 }
 
 export type StoryItem = SentenceItem | DirectionItem;
+export type Highlights = Record<number, 'error' | 'good'>;
 
-interface SentenceDisplayProps {
+type Props = {
   item: StoryItem | null;
-  nextItem: StoryItem | null;
-  onDirectionSelect: (n: number) => void;
-}
+  nextItem?: StoryItem | null;
+  onDirectionSelect?: (choice: number) => void;
+  highlights?: Highlights;
+};
 
 export function SentenceDisplay({
   item,
   nextItem,
   onDirectionSelect,
-}: SentenceDisplayProps) {
+  highlights,
+}: Props) {
   if (!item) return <div className="card">...</div>;
 
   if (item.type === 'direction' && nextItem && nextItem.type === 'direction') {
@@ -36,10 +39,15 @@ export function SentenceDisplay({
         {options.map((opt, i) => (
           <button
             key={i}
-            onClick={() => onDirectionSelect(i)}
+            onClick={() => onDirectionSelect?.(i)}
             className="flex-1 bg-white p-4 rounded-xl shadow hover:bg-slate-50 transition hover:scale-[1.02]"
           >
-            <InteractiveSentence text={opt.text} audio={opt.audio} words={opt.words} className="text-[1.5rem]" />
+            <InteractiveSentence
+              text={opt.text}
+              audio={opt.audio}
+              words={opt.words}
+              className="text-[1.5rem]"
+            />
           </button>
         ))}
       </div>
@@ -47,7 +55,25 @@ export function SentenceDisplay({
   }
 
   if (item.type === 'sentence') {
-    return <InteractiveSentence text={item.text} audio={item.audio} words={item.words} />;
+    const text = item.text;
+    const words = text.split(/\s+/);
+
+    return (
+      <p className="leading-relaxed">
+        {words.map((w, i) => {
+          const h = highlights?.[i];
+          const cls =
+            h === 'error'
+              ? 'bg-red-100 text-red-700 underline decoration-red-400 rounded px-1'
+              : '';
+          return (
+            <span key={i} className={cls}>
+              {w}{' '}
+            </span>
+          );
+        })}
+      </p>
+    );
   }
 
   return null;

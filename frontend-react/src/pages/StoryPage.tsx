@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useRecorder } from '@/hooks/useRecorder';
 import type { FeedbackData } from '@/hooks/useRecorder';
 import { SentenceDisplay } from '@/components/story/SentenceDisplay';
-import type { StoryItem } from '@/components/story/SentenceDisplay';
+import type { StoryItem, Highlights } from '@/components/story/SentenceDisplay';
 import { FeedbackBox } from '@/components/story/FeedbackBox';
 import { RecordControls } from '@/components/story/RecordControls';
 
@@ -84,6 +84,20 @@ export default function StoryPage() {
     return /opnieuw|niet gehoord|again|wrong/i.test(feedback.feedback_text);
   }, [feedback]);
 
+  const highlights: Highlights = useMemo(() => {
+    if (!feedback?.errors || !currentItem || currentItem.type !== 'sentence') return {};
+    const ref = currentItem.text.replace(/[.,!?;:]/g, '').toLowerCase();
+    const tokens = ref.split(/\s+/);
+    const bad = new Set(
+      feedback.errors.map((e) => e.expected_word?.toLowerCase?.() || ''),
+    );
+    const map: Highlights = {};
+    tokens.forEach((w, i) => {
+      if (bad.has(w)) map[i] = 'error';
+    });
+    return map;
+  }, [feedback, currentItem]);
+
   const progress = (index + 1) / storyData.length * 100;
 
   return (
@@ -95,6 +109,7 @@ export default function StoryPage() {
             item={currentItem}
             nextItem={nextItem}
             onDirectionSelect={handleDirection}
+            highlights={highlights}
           />
         </div>
         <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
