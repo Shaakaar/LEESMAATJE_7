@@ -1,3 +1,5 @@
+import { audioQueue } from '@/utils/audioQueue';
+
 interface InteractiveSentenceProps {
   text: string;
   audio: string;
@@ -26,7 +28,11 @@ export function InteractiveSentence({
           }`}
           onClick={(e) => {
             e.stopPropagation();
-            if (words && words[i]) new Audio("/api/audio/" + words[i]).play();
+            if (words && words[i])
+              audioQueue.enqueue("/api/audio/" + words[i], {
+                waitReady: true,
+                readyUrl: "/api/audio/" + words[i],
+              });
           }}
         >
           {w}
@@ -37,7 +43,10 @@ export function InteractiveSentence({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          new Audio("/api/audio/" + audio).play();
+          audioQueue.enqueue("/api/audio/" + audio, {
+            waitReady: true,
+            readyUrl: "/api/audio/" + audio,
+          });
         }}
         className="inline-flex items-center justify-center ml-2 p-2 rounded-full bg-primary text-white"
       >

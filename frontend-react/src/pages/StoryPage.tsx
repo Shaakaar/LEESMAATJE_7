@@ -4,6 +4,7 @@ import { useAuthStore } from '@/lib/useAuthStore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useRecorder } from '@/hooks/useRecorder';
 import type { FeedbackData } from '@/hooks/useRecorder';
+import { audioQueue } from '@/utils/audioQueue';
 import { SentenceDisplay } from '@/components/story/SentenceDisplay';
 import type { StoryItem } from '@/components/story/SentenceDisplay';
 import { FeedbackBox } from '@/components/story/FeedbackBox';
@@ -95,11 +96,14 @@ export default function StoryPage() {
   }
 
   function playRecorded() {
-    if (playbackUrl) new Audio(playbackUrl).play();
+    if (playbackUrl) audioQueue.enqueue(playbackUrl);
   }
 
   function replayFeedback() {
-    if (feedback?.feedback_audio) new Audio('/api/audio/' + feedback.feedback_audio).play();
+    if (feedback?.feedback_audio) {
+      const url = '/api/audio/' + feedback.feedback_audio;
+      audioQueue.enqueue(url, { waitReady: true, readyUrl: url });
+    }
   }
 
   const progress = ((index + 1) / storyData.length) * 100;
