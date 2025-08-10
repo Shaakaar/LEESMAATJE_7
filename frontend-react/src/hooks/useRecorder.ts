@@ -86,6 +86,7 @@ export function useRecorder({
     stop_to_feedback_ready_ms?: number;
     feedback_ready_to_play_ms?: number;
     stop_to_feedback_play_ms?: number;
+    feedback_playing?: number;
     preroll_start?: number;
     preroll_end?: number;
     sent?: boolean;
@@ -449,7 +450,7 @@ export function useRecorder({
                     });
                     playFeedback();
                     break;
-                  } catch (e) {
+                  } catch {
                     if (controller.signal.aborted) break;
                   }
                 }
