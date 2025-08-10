@@ -108,6 +108,8 @@ def _print_timeline(results: dict) -> None:
         ("first_chunk_received", "azure_first_write", "azure first write"),
         ("w2v2_ready_ph", "w2v2_first_decode", "w2v2 first decode"),
         ("/stop_in", "json_ready", "/stop roundtrip"),
+        ("gpt_req_start", "gpt_resp_ok", "GPT latency"),
+        ("gpt_resp_ok", "tts_done", "TTS synth"),
     ]:
         d = _delta(tb, a, b)
         if d is not None:
@@ -124,6 +126,10 @@ def _print_timeline(results: dict) -> None:
         d = _delta(tf, a, b)
         if d is not None:
             print(f"  {label}: {d:.1f} ms")
+
+    v = results.get("frontend_stop_to_feedback_ms")
+    if isinstance(v, (int, float)):
+        print(f"\nstop click → FEEDBACK play: {v:.1f} ms")
 
 
 @app.post("/api/register")
@@ -354,6 +360,22 @@ async def get_audio(name: str):
     raise HTTPException(status_code=404, detail="Audio not found")
 
 
+@app.post("/api/telemetry")
+async def telemetry(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    metric = payload.get("metric")
+    value_ms = payload.get("value_ms")
+    if isinstance(metric, str) and isinstance(value_ms, (int, float)):
+        try:
+            print(f"Frontend metric: {metric} — {float(value_ms):.1f} ms")
+        except Exception:
+            pass
+    return {"status": "ok"}
+
+
 @app.post("/api/realtime/start")
 async def realtime_start(
     sentence: str = Form(...),
@@ -415,10 +437,18 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
         results["timeline_backend"] = sess.timeline.to_dict()
     _print_timeline(results)
     req, messages = prompt_builder.build(results, state={})
+    if sess.timeline:
+        sess.timeline.mark("gpt_req_start")
     tutor_resp = await gpt_client.chat(messages)
+    if sess.timeline:
+        sess.timeline.mark("gpt_resp_ok")
     from .tts import tts_to_file
 
+    if sess.timeline:
+        sess.timeline.mark("tts_start")
     feedback_audio = tts_to_file(tutor_resp.feedback_text)
+    if sess.timeline:
+        sess.timeline.mark("tts_done")
 
     results["correct"] = tutor_resp.is_correct
 
