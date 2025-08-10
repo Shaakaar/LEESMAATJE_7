@@ -427,6 +427,12 @@ async def realtime_chunk(sid: str, file: UploadFile = File(...)):
 
 @app.post("/api/realtime/stop/{sid}")
 async def realtime_stop(sid: str, request: Request, background: BackgroundTasks):
+    """Stop a realtime session.
+
+    Accepts an optional ``background_tts=1`` query parameter that triggers
+    text-to-speech generation in a background task and immediately returns a
+    JSON response with ``status: 'pending'``.
+    """
     sess = sessions.pop(sid, None)
     if not sess:
         raise HTTPException(status_code=404, detail="Unknown session")
