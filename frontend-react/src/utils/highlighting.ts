@@ -8,7 +8,7 @@ export function normalize(w: string): string {
 
 export function buildErrorIndices(
   referenceText: string,
-  errors: Array<{ expected_word?: string; issue?: string }>
+  errors: Array<{ expected_word?: string; word?: string; issue?: string }>
 ): Set<number> {
   const tokens = referenceText.split(/\s+/);
   const idxByNorm = new Map<string, number[]>();
@@ -26,7 +26,7 @@ export function buildErrorIndices(
 
   const errorIdx = new Set<number>();
   for (const e of errors || []) {
-    const k = normalize(e.expected_word || '');
+    const k = normalize(e.expected_word || e.word || '');
     const i = takeLeftmost(k);
     if (typeof i === 'number') errorIdx.add(i);
   }
