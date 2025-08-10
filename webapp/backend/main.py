@@ -17,6 +17,8 @@ import tempfile
 import shutil
 import sqlite3
 import asyncio
+import time
+from pathlib import Path
 from rich.console import Console
 
 from . import config, storage
@@ -357,20 +359,18 @@ async def process(
     )
 
 
-@app.get("/api/audio/{name}")
-async def get_audio(name: str):
-    temp_path = os.path.join(tempfile.gettempdir(), name)
-    if os.path.exists(temp_path):
-        return FileResponse(temp_path, media_type="audio/wav")
-    stored = storage.STORAGE_DIR / name
-    if stored.exists():
-        return FileResponse(stored, media_type="audio/wav")
-    # Word-level TTS files are cached in a dedicated subdirectory.  When the
-    # frontend requests a file like ``/api/audio/de.wav`` we need to look for it
-    # in that cache as well.
-    word_path = storage.STORAGE_DIR / "words" / name
-    if word_path.exists():
-        return FileResponse(word_path, media_type="audio/wav")
+@app.api_route("/api/audio/{name}", methods=["GET", "HEAD"])
+async def get_audio(name: str, request: Request):
+    candidates = [
+        os.path.join(tempfile.gettempdir(), name),
+        Path(storage.STORAGE_DIR) / name,
+        Path(storage.STORAGE_DIR) / "words" / name,
+    ]
+    for p in candidates:
+        p = str(p)
+        if os.path.exists(p):
+            # Let FastAPI add headers; works for HEAD too
+            return FileResponse(p, media_type="audio/wav")
     raise HTTPException(status_code=404, detail="Audio not found")
 
 
@@ -429,10 +429,11 @@ async def realtime_chunk(sid: str, file: UploadFile = File(...)):
 async def realtime_stop(sid: str, request: Request, background: BackgroundTasks):
     """Stop a realtime session.
 
-    Accepts an optional ``background_tts=1`` query parameter that triggers
-    text-to-speech generation in a background task and immediately returns a
-    JSON response with ``status: 'pending'``.
+    Accepts an optional ``background_tts`` query parameter.  When omitted or
+    truthy, text-to-speech generation runs in a background task and the handler
+    returns immediately with ``status: 'pending'``.
     """
+    start_time = time.perf_counter()
     sess = sessions.pop(sid, None)
     if not sess:
         raise HTTPException(status_code=404, detail="Unknown session")
@@ -466,7 +467,8 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
     feedback_name = f"{results['session_id']}_fb.wav"
     feedback_dest = storage.STORAGE_DIR / feedback_name
 
-    background_tts = request.query_params.get("background_tts") in {"1", "true", "yes"}
+    q = request.query_params.get("background_tts")
+    background_tts = True if q is None else q in {"1", "true", "yes"}
 
     if background_tts:
         background.add_task(_tts_background, tutor_resp.feedback_text, feedback_dest, results, sess.timeline)
@@ -491,16 +493,27 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
         str(dest_audio),
         req.model_dump_json(),
     )
-    return JSONResponse(
-        {
-            "feedback_text": tutor_resp.feedback_text,
-            "feedback_audio": feedback_name,
-            "correct": tutor_resp.is_correct,
-            "errors": [e.model_dump(by_alias=True) for e in tutor_resp.errors],
-            "delay_seconds": config.DELAY_SECONDS,
-            "status": "pending" if background_tts else "ready",
-        }
-    )
+    timeline_dict = sess.timeline.to_dict() if sess.timeline else {}
+    gpt_ms = None
+    tts_ms = None
+    if "gpt_req_start" in timeline_dict and "gpt_resp_ok" in timeline_dict:
+        gpt_ms = int(timeline_dict["gpt_resp_ok"] - timeline_dict["gpt_req_start"])
+    if not background_tts and "tts_start" in timeline_dict and "tts_done" in timeline_dict:
+        tts_ms = int(timeline_dict["tts_done"] - timeline_dict["tts_start"])
+    server_stop_ms = int((time.perf_counter() - start_time) * 1000)
+    payload = {
+        "feedback_text": tutor_resp.feedback_text,
+        "feedback_audio": feedback_name,
+        "correct": tutor_resp.is_correct,
+        "errors": [e.model_dump(by_alias=True) for e in tutor_resp.errors],
+        "delay_seconds": config.DELAY_SECONDS,
+        "status": "pending" if background_tts else "ready",
+        "server_stop_ms": server_stop_ms,
+        "gpt_ms": gpt_ms,
+    }
+    if tts_ms is not None:
+        payload["tts_ms"] = tts_ms
+    return JSONResponse(payload)
 
 
 # ---------------------------------------------------------------------------

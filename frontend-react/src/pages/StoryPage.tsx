@@ -168,6 +168,7 @@ export default function StoryPage() {
           isCorrect={!!isCorrect}
           onReplay={replayFeedback}
           visible={!!feedback}
+          pending={feedback?.status === 'pending'}
         />
       </div>
     </AppShell>
