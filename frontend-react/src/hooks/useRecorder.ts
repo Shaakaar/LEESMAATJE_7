@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RingBuffer } from "../utils/ringBuffer";
+import { toast } from "@/components/ui/toast";
 
 const SEND_INTERVAL_MS = 100; // how often to upload audio (in ms)
 const DEBUG = false; // set true to enable chunk logs
@@ -8,6 +9,32 @@ let lastSend = 0;
 const PRE_ROLL_SEC = 1.5;
 
 const FILLER_AUDIO = "de_zin_was.wav";
+
+function waitForFeedbackFile(url: string, onReady: () => void) {
+  let delay = 100;
+  let cancelled = false;
+  (async function loop() {
+    while (!cancelled) {
+      try {
+        const res = await fetch(url, {
+          method: "HEAD",
+          cache: "no-store",
+        });
+        if (res.ok) {
+          onReady();
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 800);
+    }
+  })();
+  return () => {
+    cancelled = true;
+  };
+}
 
 export interface FeedbackData {
   feedback_text: string;
@@ -58,7 +85,7 @@ export function useRecorder({
     stop_fetch_ok?: number;
     preroll_start?: number;
     preroll_end?: number;
-    feedback_canplay?: number;
+    feedback_ready?: number;
     feedback_playing?: number;
     sent?: boolean;
   }>({});
@@ -297,74 +324,49 @@ export function useRecorder({
         sendChunk(new Blob([flat], { type: "application/octet-stream" }));
       }
       const sessionId = sessionIdRef.current;
-      stopTimingRef.current.stop_fetch_start = performance.now();
-      const stopPromise = fetch(`/api/realtime/stop/${sessionId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_timeline: timelineRef.current }),
-      }).then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.detail);
-        stopTimingRef.current.stop_fetch_ok = performance.now();
-        return j as FeedbackData;
+      const feedbackUrl = `/api/audio/${sessionId}_fb.wav`;
+      let preRollEnded = false;
+      let feedbackReady = false;
+      let pollTimedOut = false;
+      let hasStartedFeedbackPlayback = false;
+      let feedbackReadyResolve: (() => void) | null = null;
+      const feedbackReadyPromise = new Promise<void>((res) => {
+        feedbackReadyResolve = res;
       });
-      sessionIdRef.current = null;
-      setTimeout(async () => {
-        setStatus("Feedback afspelen");
-        stopTimingRef.current.preroll_start = performance.now();
-        await new Promise((res) => {
-          const a = new Audio("/api/audio/" + FILLER_AUDIO);
-          a.onended = res;
-          a.play();
+      let timeoutId: ReturnType<typeof setTimeout>;
+      const cancelPoll = waitForFeedbackFile(feedbackUrl, () => {
+        feedbackReady = true;
+        stopTimingRef.current.feedback_ready = performance.now();
+        clearTimeout(timeoutId);
+        feedbackReadyResolve?.();
+        maybeStartFeedbackPlayback();
+      });
+      timeoutId = setTimeout(() => {
+        pollTimedOut = true;
+        cancelPoll();
+        toast({
+          title: "Feedback", 
+          description: "feedback loading timed out", 
+          variant: "destructive",
         });
-        if (sentenceAudio)
-          await new Promise((res) => {
-            const a = new Audio("/api/audio/" + sentenceAudio);
-            a.onended = res;
-            a.play();
-          });
-        stopTimingRef.current.preroll_end = performance.now();
-        let data: FeedbackData;
-        try {
-          data = await stopPromise;
-        } catch (err) {
-          setStatus("Fout: " + (err as Error).message);
-          return;
-        }
-        const total = recordedChunksRef.current.reduce(
-          (n, c) => n + c.length,
-          0,
-        );
-        const flat = new Int16Array(total);
-        let pos = 0;
-        for (const c of recordedChunksRef.current) {
-          flat.set(c, pos);
-          pos += c.length;
-        }
-        const wav = encodeWav(flat, sampleRate);
-        console.log("final wav blob", wav.size, "bytes");
-        const url = URL.createObjectURL(wav);
-        setPlaybackUrl(url);
-        const feedbackAudio = new Audio(`/api/audio/${data.feedback_audio}`);
-        feedbackAudio.preload = "auto";
-        feedbackAudio.addEventListener("canplay", () => {
-          if (stopTimingRef.current.feedback_canplay === undefined)
-            stopTimingRef.current.feedback_canplay = performance.now();
-        });
+        maybeStartFeedbackPlayback();
+      }, 25000);
 
+      function startFeedbackPlayback() {
+        if (hasStartedFeedbackPlayback) return;
+        hasStartedFeedbackPlayback = true;
+        const feedbackAudio = new Audio(feedbackUrl);
+        feedbackAudio.preload = "auto";
         const onPlaying = () => {
           if (stopTimingRef.current.sent) return;
-          if (stopTimingRef.current.feedback_canplay === undefined)
-            stopTimingRef.current.feedback_canplay = performance.now();
           stopTimingRef.current.feedback_playing = performance.now();
-
           const {
             stop_click,
             stop_fetch_start,
             stop_fetch_ok,
             preroll_start,
             preroll_end,
-            feedback_canplay,
+            feedback_ready,
             feedback_playing,
           } = stopTimingRef.current;
 
@@ -374,12 +376,15 @@ export function useRecorder({
             stop_fetch_ok !== undefined
           )
             metrics.stop_to_json_ms = stop_fetch_ok - stop_fetch_start;
-          if (stop_fetch_ok !== undefined && preroll_start !== undefined)
-            metrics.json_to_preroll_start_ms = preroll_start - stop_fetch_ok;
+          if (stop_click !== undefined && preroll_start !== undefined)
+            metrics.stop_to_preroll_start_ms = preroll_start - stop_click;
           if (preroll_start !== undefined && preroll_end !== undefined)
             metrics.preroll_total_ms = preroll_end - preroll_start;
-          if (stop_fetch_ok !== undefined && feedback_canplay !== undefined)
-            metrics.feedback_ready_latency_ms = feedback_canplay - stop_fetch_ok;
+          if (stop_click !== undefined && feedback_ready !== undefined)
+            metrics.stop_to_feedback_ready_ms = feedback_ready - stop_click;
+          if (preroll_end !== undefined && feedback_playing !== undefined)
+            metrics.preroll_end_to_feedback_play_ms =
+              feedback_playing - preroll_end;
           if (stop_click !== undefined && feedback_playing !== undefined)
             metrics.stop_to_feedback_play_ms =
               feedback_playing - stop_click;
@@ -406,11 +411,75 @@ export function useRecorder({
           stopTimingRef.current.sent = true;
           feedbackAudio.removeEventListener("playing", onPlaying);
         };
-
         feedbackAudio.addEventListener("playing", onPlaying, { once: true });
-        onFeedback(data);
         feedbackAudio.onended = () => setStatus("");
-        await feedbackAudio.play();
+        feedbackAudio.play().catch(() => {});
+      }
+
+      function maybeStartFeedbackPlayback() {
+        if (!preRollEnded) return;
+        if (!feedbackReady && !pollTimedOut) return;
+        startFeedbackPlayback();
+      }
+
+      stopTimingRef.current.stop_fetch_start = performance.now();
+      const stopPromise = fetch(
+        `/api/realtime/stop/${sessionId}?background_tts=1`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_timeline: timelineRef.current }),
+        },
+      ).then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail);
+        stopTimingRef.current.stop_fetch_ok = performance.now();
+        return j as FeedbackData;
+      });
+      sessionIdRef.current = null;
+      stopPromise
+        .then((data) => {
+          onFeedback(data);
+          maybeStartFeedbackPlayback();
+        })
+        .catch((err) => {
+          setStatus("Fout: " + (err as Error).message);
+        });
+
+      setTimeout(async () => {
+        setStatus("Feedback afspelen");
+        stopTimingRef.current.preroll_start = performance.now();
+        await new Promise((res) => {
+          const a = new Audio("/api/audio/" + FILLER_AUDIO);
+          a.onended = res;
+          a.play();
+        });
+        if (sentenceAudio)
+          await new Promise((res) => {
+            const a = new Audio("/api/audio/" + sentenceAudio);
+            a.onended = res;
+            a.play();
+          });
+        stopTimingRef.current.preroll_end = performance.now();
+
+        const total = recordedChunksRef.current.reduce(
+          (n, c) => n + c.length,
+          0,
+        );
+        const flat = new Int16Array(total);
+        let pos = 0;
+        for (const c of recordedChunksRef.current) {
+          flat.set(c, pos);
+          pos += c.length;
+        }
+        const wav = encodeWav(flat, sampleRate);
+        console.log("final wav blob", wav.size, "bytes");
+        const url = URL.createObjectURL(wav);
+        setPlaybackUrl(url);
+
+        preRollEnded = true;
+        if (!feedbackReady && !pollTimedOut) await feedbackReadyPromise;
+        maybeStartFeedbackPlayback();
       }, delayRef.current * 1000);
       return;
     }
