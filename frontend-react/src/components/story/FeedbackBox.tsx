@@ -1,42 +1,33 @@
+interface FeedbackBoxProps {
+  text: string;
+  negative: boolean;
+  onReplay: () => void;
+  visible: boolean;
+}
+
 export function FeedbackBox({
   text,
   negative,
   onReplay,
-  visible
-}: {
-  text: string;
-  negative: boolean;
-  onReplay?: () => void;
-  visible: boolean;
-}) {
-  if (!visible) return null;
+  visible,
+}: FeedbackBoxProps) {
   return (
     <div
-      className={[
-        'mt-2 rounded-xl border p-4 flex items-start gap-3',
-        negative
-          ? 'bg-red-50 border-red-200 text-red-800'
-          : 'bg-green-50 border-green-200 text-green-800'
-      ].join(' ')}
-      role="status"
-      aria-live="polite"
+      className={`flex items-center justify-between gap-2 mt-4 p-4 rounded-xl shadow bg-white transition-opacity ${
+        visible ? "opacity-100" : "opacity-0"
+      } ${negative ? "bg-red-200" : "bg-green-200"}`}
     >
-      <div className="pt-0.5">
-        {negative ? <i className="lucide lucide-x-circle" /> : <i className="lucide lucide-check-circle" />}
-      </div>
-      <div
-        className="prose prose-sm max-w-none"
+      <p
         dangerouslySetInnerHTML={{ __html: text }}
+        className="text-left flex-1"
       />
-      {onReplay && (
-        <button
-          onClick={onReplay}
-          className="ml-auto px-3 py-1 rounded-full bg-white/80 hover:bg-white border"
-        >
-          <i className="lucide lucide-volume-2" /> Afspelen
-        </button>
-      )}
+      <button
+        onClick={onReplay}
+        className="flex items-center gap-1 px-4 py-2 rounded-full bg-primary text-white flex-shrink-0"
+      >
+        <i className="lucide lucide-volume-2" />
+        <span className="font-semibold">Opnieuw</span>
+      </button>
     </div>
   );
 }
-
