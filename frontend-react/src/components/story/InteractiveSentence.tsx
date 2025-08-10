@@ -3,21 +3,34 @@ interface InteractiveSentenceProps {
   audio: string;
   words?: string[];
   className?: string;
+  errorIndices?: Set<number>;
 }
 
-export function InteractiveSentence({ text, audio, words, className }: InteractiveSentenceProps) {
+export function InteractiveSentence({
+  text,
+  audio,
+  words,
+  className,
+  errorIndices,
+}: InteractiveSentenceProps) {
+  const tokens = text.split(/\s+/);
   return (
-    <p className={"text-[2rem] " + (className ?? "")}> 
-      {text.split(" ").map((w, i) => (
+    <p className={"text-[2rem] " + (className ?? "")}>
+      {tokens.map((w, i) => (
         <span
           key={i}
-          className="word cursor-pointer hover:text-primary transition-colors"
+          className={`word cursor-pointer hover:text-primary transition-colors ${
+            errorIndices?.has(i)
+              ? 'bg-rose-100 text-rose-800 rounded px-1'
+              : ''
+          }`}
           onClick={(e) => {
             e.stopPropagation();
             if (words && words[i]) new Audio("/api/audio/" + words[i]).play();
           }}
         >
-          {w}&nbsp;
+          {w}
+          {i < tokens.length - 1 && ' '}
         </span>
       ))}
       <button
