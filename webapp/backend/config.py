@@ -47,6 +47,10 @@ WORD_VOICE_INSTRUCTIONS = "Spreek in Nederlands"
 # Delay before playing filler sentence after stop (seconds)
 DELAY_SECONDS = 0.5
 
+# Run text-to-speech generation in a background task by default.  When set to
+# ``False`` the realtime API waits for TTS to complete before responding.
+BACKGROUND_TTS = os.getenv("BACKGROUND_TTS", "true").lower() not in {"0", "false", "no"}
+
 # Overall pipeline mode: when ``False`` the backend expects a single WAV file
 # instead of realtime chunks.
 REALTIME = os.getenv("REALTIME", "true").lower() not in {"0", "false", "no"}
