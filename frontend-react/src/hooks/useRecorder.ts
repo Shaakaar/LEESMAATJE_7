@@ -12,8 +12,16 @@ const FILLER_AUDIO = "de_zin_was.wav";
 export interface FeedbackData {
   feedback_text: string;
   feedback_audio: string;
-  errors?: { word?: string; expected_word?: string }[];
-  correct?: boolean;
+  reference_text: string;
+  is_correct: boolean;
+  errors: {
+    expected_word: string;
+    heard_word?: string;
+    issue: 'mispronunciation' | 'vowel' | 'consonant' | 'omission' | 'insertion';
+    expected_phonemes?: string;
+    heard_phonemes?: string;
+    letter_errors?: unknown[];
+  }[];
 }
 
 interface RecorderOptions {

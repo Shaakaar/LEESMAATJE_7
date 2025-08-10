@@ -20,12 +20,16 @@ interface SentenceDisplayProps {
   item: StoryItem | null;
   nextItem: StoryItem | null;
   onDirectionSelect: (n: number) => void;
+  highlights?: Record<number, 'error' | 'correct'>;
+  insertions?: number[];
 }
 
 export function SentenceDisplay({
   item,
   nextItem,
   onDirectionSelect,
+  highlights,
+  insertions,
 }: SentenceDisplayProps) {
   if (!item) return <div className="card">...</div>;
 
@@ -47,7 +51,15 @@ export function SentenceDisplay({
   }
 
   if (item.type === 'sentence') {
-    return <InteractiveSentence text={item.text} audio={item.audio} words={item.words} />;
+    return (
+      <InteractiveSentence
+        text={item.text}
+        audio={item.audio}
+        words={item.words}
+        highlights={highlights}
+        insertions={insertions}
+      />
+    );
   }
 
   return null;

@@ -21,4 +21,13 @@
   .word.wrong {
     @apply bg-red-200 px-1 rounded;
   }
+  .token-error {
+    @apply text-red-600 font-semibold;
+  }
+  .token-correct {
+    @apply text-green-600;
+  }
+  .token-insert-near {
+    @apply underline decoration-dotted decoration-red-500;
+  }
 }
