@@ -6,6 +6,7 @@ from fastapi import (
     Form,
     Request,
     BackgroundTasks,
+    Response,
 )
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
@@ -359,8 +360,8 @@ async def process(
     )
 
 
-@app.api_route("/api/audio/{name}", methods=["GET", "HEAD"])
-async def get_audio(name: str, request: Request):
+@app.get("/api/audio/{name}")
+async def get_audio(name: str):
     candidates = [
         os.path.join(tempfile.gettempdir(), name),
         Path(storage.STORAGE_DIR) / name,
@@ -369,8 +370,30 @@ async def get_audio(name: str, request: Request):
     for p in candidates:
         p = str(p)
         if os.path.exists(p):
-            # Let FastAPI add headers; works for HEAD too
-            return FileResponse(p, media_type="audio/wav")
+            return FileResponse(
+                p,
+                media_type="audio/wav",
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+    raise HTTPException(status_code=404, detail="Audio not found")
+
+
+@app.head("/api/audio/{name}")
+async def head_audio(name: str):
+    candidates = [
+        os.path.join(tempfile.gettempdir(), name),
+        Path(storage.STORAGE_DIR) / name,
+        Path(storage.STORAGE_DIR) / "words" / name,
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return Response(
+                status_code=200,
+                headers={
+                    "Content-Type": "audio/wav",
+                    "Cache-Control": "public, max-age=86400",
+                },
+            )
     raise HTTPException(status_code=404, detail="Audio not found")
 
 
