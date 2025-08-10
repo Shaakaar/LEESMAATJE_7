@@ -1,21 +1,24 @@
 interface FeedbackBoxProps {
   text: string;
-  negative: boolean;
+  isCorrect: boolean;
   onReplay: () => void;
   visible: boolean;
 }
 
 export function FeedbackBox({
   text,
-  negative,
+  isCorrect,
   onReplay,
   visible,
 }: FeedbackBoxProps) {
+  const colorClasses = isCorrect
+    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+    : 'bg-rose-50 text-rose-800 border border-rose-200';
   return (
     <div
-      className={`flex items-center justify-between gap-2 mt-4 p-4 rounded-xl shadow bg-white transition-opacity ${
-        visible ? "opacity-100" : "opacity-0"
-      } ${negative ? "bg-red-200" : "bg-green-200"}`}
+      className={`flex items-center justify-between gap-2 mt-4 p-4 rounded-full transition-opacity ${
+        visible ? 'opacity-100' : 'opacity-0'
+      } ${colorClasses}`}
     >
       <p
         dangerouslySetInnerHTML={{ __html: text }}

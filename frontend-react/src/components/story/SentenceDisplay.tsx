@@ -20,12 +20,14 @@ interface SentenceDisplayProps {
   item: StoryItem | null;
   nextItem: StoryItem | null;
   onDirectionSelect: (n: number) => void;
+  errorIndices?: Set<number>;
 }
 
 export function SentenceDisplay({
   item,
   nextItem,
   onDirectionSelect,
+  errorIndices,
 }: SentenceDisplayProps) {
   if (!item) return <div className="card">...</div>;
 
@@ -39,7 +41,12 @@ export function SentenceDisplay({
             onClick={() => onDirectionSelect(i)}
             className="flex-1 bg-white p-4 rounded-xl shadow hover:bg-slate-50 transition hover:scale-[1.02]"
           >
-            <InteractiveSentence text={opt.text} audio={opt.audio} words={opt.words} className="text-[1.5rem]" />
+            <InteractiveSentence
+              text={opt.text}
+              audio={opt.audio}
+              words={opt.words}
+              className="text-[1.5rem]"
+            />
           </button>
         ))}
       </div>
@@ -47,7 +54,14 @@ export function SentenceDisplay({
   }
 
   if (item.type === 'sentence') {
-    return <InteractiveSentence text={item.text} audio={item.audio} words={item.words} />;
+    return (
+      <InteractiveSentence
+        text={item.text}
+        audio={item.audio}
+        words={item.words}
+        errorIndices={errorIndices}
+      />
+    );
   }
 
   return null;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { useAuthStore } from '@/lib/useAuthStore';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { SentenceDisplay } from '@/components/story/SentenceDisplay';
 import type { StoryItem } from '@/components/story/SentenceDisplay';
 import { FeedbackBox } from '@/components/story/FeedbackBox';
 import { RecordControls } from '@/components/story/RecordControls';
+import { buildErrorIndices } from '@/utils/highlighting';
 
 export default function StoryPage() {
   const { studentId, teacherId } = useAuthStore();
@@ -16,19 +17,34 @@ export default function StoryPage() {
   const [storyData, setStoryData] = useState<StoryItem[]>([]);
   const [index, setIndex] = useState(0);
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
+  const [errorIndices, setErrorIndices] = useState<Set<number>>(new Set());
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null!);
   const currentItem = storyData[index] ?? null;
   const nextItem =
     currentItem?.type === 'direction' ? (storyData[index + 1] ?? null) : null;
 
-  const { recording, status, playbackUrl, startRecording, stopRecording } = useRecorder({
-    sentence: currentItem && currentItem.type === 'sentence' ? currentItem.text : '',
+  const sentenceText =
+    currentItem && currentItem.type === 'sentence' ? currentItem.text : '';
+  const {
+    recording,
+    status,
+    playbackUrl,
+    startRecording: recorderStart,
+    stopRecording: recorderStop,
+  } = useRecorder({
+    sentence: sentenceText,
     sentenceAudio:
       currentItem && currentItem.type === 'sentence' ? currentItem.audio : undefined,
     teacherId: Number(teacherId) || 0,
     studentId: studentId ?? '',
-    onFeedback: (d) => setFeedback(d),
+    onFeedback: (d) => {
+      setFeedback(d);
+      setIsCorrect(d.correct ?? false);
+      const idxs = buildErrorIndices(sentenceText, d.errors || []);
+      setErrorIndices(idxs);
+    },
     canvas: canvasRef.current,
   });
 
@@ -61,12 +77,20 @@ export default function StoryPage() {
     navigate(`/continue${location.search}`);
   }
 
+  function resetFeedback() {
+    setFeedback(null);
+    setErrorIndices(new Set());
+    setIsCorrect(null);
+  }
+
   function next() {
     if (currentItem && currentItem.type === 'direction') return;
+    resetFeedback();
     setIndex((i) => Math.min(i + 1, storyData.length - 1));
   }
 
   function prev() {
+    resetFeedback();
     setIndex((i) => Math.max(i - 1, 0));
   }
 
@@ -78,13 +102,16 @@ export default function StoryPage() {
     if (feedback?.feedback_audio) new Audio('/api/audio/' + feedback.feedback_audio).play();
   }
 
-  const negative = useMemo(() => {
-    if (!feedback) return false;
-    if (typeof feedback.correct === 'boolean') return !feedback.correct;
-    return /opnieuw|niet gehoord|again|wrong/i.test(feedback.feedback_text);
-  }, [feedback]);
+  const progress = ((index + 1) / storyData.length) * 100;
 
-  const progress = (index + 1) / storyData.length * 100;
+  function handleStartRecording() {
+    resetFeedback();
+    recorderStart();
+  }
+
+  function handleStopRecording() {
+    recorderStop();
+  }
 
   return (
     <AppShell>
@@ -95,6 +122,7 @@ export default function StoryPage() {
             item={currentItem}
             nextItem={nextItem}
             onDirectionSelect={handleDirection}
+            errorIndices={errorIndices}
           />
         </div>
         <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -103,8 +131,8 @@ export default function StoryPage() {
         <div className="font-bold">{index + 1}/{storyData.length}</div>
         {currentItem?.type === 'sentence' && (
           <RecordControls
-            onRecord={startRecording}
-            onStop={stopRecording}
+            onRecord={handleStartRecording}
+            onStop={handleStopRecording}
             recording={recording}
             playbackUrl={playbackUrl}
             onPlayback={playRecorded}
@@ -129,8 +157,15 @@ export default function StoryPage() {
           </button>
         </div>
         <FeedbackBox
-          text={feedback ? feedback.feedback_text.replace(/\*\*(.*?)\*\*/g, '<strong class="highlight">$1</strong>') : ''}
-          negative={negative}
+          text={
+            feedback
+              ? feedback.feedback_text.replace(
+                  /\*\*(.*?)\*\*/g,
+                  '<strong class="highlight">$1</strong>',
+                )
+              : ''
+          }
+          isCorrect={!!isCorrect}
           onReplay={replayFeedback}
           visible={!!feedback}
         />
