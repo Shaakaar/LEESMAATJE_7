@@ -109,7 +109,7 @@ def _print_timeline(results: dict) -> None:
         ("w2v2_ready_ph", "w2v2_first_decode", "w2v2 first decode"),
         ("/stop_in", "json_ready", "/stop roundtrip"),
         ("gpt_req_start", "gpt_resp_ok", "GPT latency"),
-        ("gpt_resp_ok", "tts_done", "TTS synth"),
+        ("tts_start", "tts_done", "TTS synth"),
     ]:
         d = _delta(tb, a, b)
         if d is not None:
@@ -130,6 +130,20 @@ def _print_timeline(results: dict) -> None:
     v = results.get("frontend_stop_to_feedback_ms")
     if isinstance(v, (int, float)):
         print(f"\nstop click → FEEDBACK play: {v:.1f} ms")
+
+
+def _tts_background(text: str, dest: os.PathLike[str] | str, results: dict, timeline) -> None:
+    """Generate TTS in the background and log timings."""
+    from .tts import tts_to_file
+
+    if timeline:
+        timeline.mark("tts_start")
+    tmp = tts_to_file(text)
+    shutil.move(tmp, dest)
+    if timeline:
+        timeline.mark("tts_done")
+        results["timeline_backend"] = timeline.to_dict()
+        _print_timeline(results)
 
 
 @app.post("/api/register")
@@ -435,7 +449,6 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
     if sess.timeline:
         sess.timeline.mark("json_ready")
         results["timeline_backend"] = sess.timeline.to_dict()
-    _print_timeline(results)
     req, messages = prompt_builder.build(results, state={})
     if sess.timeline:
         sess.timeline.mark("gpt_req_start")
@@ -444,11 +457,22 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
         sess.timeline.mark("gpt_resp_ok")
     from .tts import tts_to_file
 
-    if sess.timeline:
-        sess.timeline.mark("tts_start")
-    feedback_audio = tts_to_file(tutor_resp.feedback_text)
-    if sess.timeline:
-        sess.timeline.mark("tts_done")
+    feedback_name = f"{results['session_id']}_fb.wav"
+    feedback_dest = storage.STORAGE_DIR / feedback_name
+
+    background_tts = request.query_params.get("background_tts") in {"1", "true", "yes"}
+
+    if background_tts:
+        background.add_task(_tts_background, tutor_resp.feedback_text, feedback_dest, results, sess.timeline)
+    else:
+        if sess.timeline:
+            sess.timeline.mark("tts_start")
+        tmp_fb = tts_to_file(tutor_resp.feedback_text)
+        shutil.move(tmp_fb, feedback_dest)
+        if sess.timeline:
+            sess.timeline.mark("tts_done")
+            results["timeline_backend"] = sess.timeline.to_dict()
+            _print_timeline(results)
 
     results["correct"] = tutor_resp.is_correct
 
@@ -464,10 +488,11 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
     return JSONResponse(
         {
             "feedback_text": tutor_resp.feedback_text,
-            "feedback_audio": os.path.basename(feedback_audio),
+            "feedback_audio": feedback_name,
             "correct": tutor_resp.is_correct,
             "errors": [e.model_dump(by_alias=True) for e in tutor_resp.errors],
             "delay_seconds": config.DELAY_SECONDS,
+            "status": "pending" if background_tts else "ready",
         }
     )
 

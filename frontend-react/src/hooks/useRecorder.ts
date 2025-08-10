@@ -52,7 +52,16 @@ export function useRecorder({
   const timelineRef = useRef<Record<string, number>>({});
   const ringRef = useRef<RingBuffer | null>(null);
   const backendReadyRef = useRef(false);
-  const stopTimingRef = useRef<{ stop_click?: number; feedback_play_start?: number; sent?: boolean }>({});
+  const stopTimingRef = useRef<{
+    stop_click?: number;
+    stop_fetch_start?: number;
+    stop_fetch_ok?: number;
+    preroll_start?: number;
+    preroll_end?: number;
+    feedback_canplay?: number;
+    feedback_playing?: number;
+    sent?: boolean;
+  }>({});
 
   function ensureRing(sampleRate: number) {
     const cap = Math.max(1, Math.round(sampleRate * PRE_ROLL_SEC));
@@ -288,6 +297,7 @@ export function useRecorder({
         sendChunk(new Blob([flat], { type: "application/octet-stream" }));
       }
       const sessionId = sessionIdRef.current;
+      stopTimingRef.current.stop_fetch_start = performance.now();
       const stopPromise = fetch(`/api/realtime/stop/${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -295,11 +305,13 @@ export function useRecorder({
       }).then(async (r) => {
         const j = await r.json();
         if (!r.ok) throw new Error(j.detail);
+        stopTimingRef.current.stop_fetch_ok = performance.now();
         return j as FeedbackData;
       });
       sessionIdRef.current = null;
       setTimeout(async () => {
         setStatus("Feedback afspelen");
+        stopTimingRef.current.preroll_start = performance.now();
         await new Promise((res) => {
           const a = new Audio("/api/audio/" + FILLER_AUDIO);
           a.onended = res;
@@ -311,6 +323,7 @@ export function useRecorder({
             a.onended = res;
             a.play();
           });
+        stopTimingRef.current.preroll_end = performance.now();
         let data: FeedbackData;
         try {
           data = await stopPromise;
@@ -334,30 +347,63 @@ export function useRecorder({
         setPlaybackUrl(url);
         const feedbackAudio = new Audio(`/api/audio/${data.feedback_audio}`);
         feedbackAudio.preload = "auto";
+        feedbackAudio.addEventListener("canplay", () => {
+          if (stopTimingRef.current.feedback_canplay === undefined)
+            stopTimingRef.current.feedback_canplay = performance.now();
+        });
 
         const onPlaying = () => {
           if (stopTimingRef.current.sent) return;
-          stopTimingRef.current.feedback_play_start = performance.now();
-          const delta =
-            stopTimingRef.current.feedback_play_start -
-            (stopTimingRef.current.stop_click ??
-              stopTimingRef.current.feedback_play_start);
-          stopTimingRef.current.sent = true;
+          if (stopTimingRef.current.feedback_canplay === undefined)
+            stopTimingRef.current.feedback_canplay = performance.now();
+          stopTimingRef.current.feedback_playing = performance.now();
 
-          fetch("/api/telemetry", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              metric: "stop_to_feedback_play_ms",
-              value_ms: delta,
-              session_id: sessionId ?? undefined,
-            }),
-          }).catch(() => {});
+          const {
+            stop_click,
+            stop_fetch_start,
+            stop_fetch_ok,
+            preroll_start,
+            preroll_end,
+            feedback_canplay,
+            feedback_playing,
+          } = stopTimingRef.current;
+
+          const metrics: Record<string, number> = {};
+          if (
+            stop_fetch_start !== undefined &&
+            stop_fetch_ok !== undefined
+          )
+            metrics.stop_to_json_ms = stop_fetch_ok - stop_fetch_start;
+          if (stop_fetch_ok !== undefined && preroll_start !== undefined)
+            metrics.json_to_preroll_start_ms = preroll_start - stop_fetch_ok;
+          if (preroll_start !== undefined && preroll_end !== undefined)
+            metrics.preroll_total_ms = preroll_end - preroll_start;
+          if (stop_fetch_ok !== undefined && feedback_canplay !== undefined)
+            metrics.feedback_ready_latency_ms = feedback_canplay - stop_fetch_ok;
+          if (stop_click !== undefined && feedback_playing !== undefined)
+            metrics.stop_to_feedback_play_ms =
+              feedback_playing - stop_click;
+
+          for (const [metric, value] of Object.entries(metrics)) {
+            fetch("/api/telemetry", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                metric,
+                value_ms: value,
+                session_id: sessionId ?? undefined,
+              }),
+            }).catch(() => {});
+          }
 
           // eslint-disable-next-line no-console
-          console.log(
-            `stop click → FEEDBACK play: ${delta.toFixed(1)} ms`
-          );
+          if (metrics.stop_to_feedback_play_ms !== undefined)
+            console.log(
+              `stop click → FEEDBACK play: ${metrics.stop_to_feedback_play_ms.toFixed(
+                1,
+              )} ms`
+            );
+          stopTimingRef.current.sent = true;
           feedbackAudio.removeEventListener("playing", onPlaying);
         };
 
@@ -414,13 +460,13 @@ export function useRecorder({
 
           const onPlaying = () => {
             if (stopTimingRef.current.sent) return;
-            stopTimingRef.current.feedback_play_start = performance.now();
+            stopTimingRef.current.feedback_playing = performance.now();
             const delta =
-              stopTimingRef.current.feedback_play_start -
+              stopTimingRef.current.feedback_playing -
               (stopTimingRef.current.stop_click ??
-                stopTimingRef.current.feedback_play_start);
+                stopTimingRef.current.feedback_playing);
             stopTimingRef.current.sent = true;
-
+            
             fetch("/api/telemetry", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
