@@ -52,6 +52,7 @@ export function useRecorder({
   const timelineRef = useRef<Record<string, number>>({});
   const ringRef = useRef<RingBuffer | null>(null);
   const backendReadyRef = useRef(false);
+  const stopTimingRef = useRef<{ stop_click?: number; feedback_play_start?: number; sent?: boolean }>({});
 
   function ensureRing(sampleRate: number) {
     const cap = Math.max(1, Math.round(sampleRate * PRE_ROLL_SEC));
@@ -260,6 +261,7 @@ export function useRecorder({
 
   async function stopRecording() {
     console.log("stopRecording");
+    stopTimingRef.current = { stop_click: performance.now() };
     recordingRef.current = false;
     setRecording(false);
     backendReadyRef.current = false;
@@ -285,7 +287,8 @@ export function useRecorder({
         PCM_QUEUE.length = 0;
         sendChunk(new Blob([flat], { type: "application/octet-stream" }));
       }
-      const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, {
+      const sessionId = sessionIdRef.current;
+      const stopPromise = fetch(`/api/realtime/stop/${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ client_timeline: timelineRef.current }),
@@ -329,10 +332,39 @@ export function useRecorder({
         console.log("final wav blob", wav.size, "bytes");
         const url = URL.createObjectURL(wav);
         setPlaybackUrl(url);
-        const fb = new Audio("/api/audio/" + data.feedback_audio);
+        const feedbackAudio = new Audio(`/api/audio/${data.feedback_audio}`);
+        feedbackAudio.preload = "auto";
+
+        const onPlaying = () => {
+          if (stopTimingRef.current.sent) return;
+          stopTimingRef.current.feedback_play_start = performance.now();
+          const delta =
+            stopTimingRef.current.feedback_play_start -
+            (stopTimingRef.current.stop_click ??
+              stopTimingRef.current.feedback_play_start);
+          stopTimingRef.current.sent = true;
+
+          fetch("/api/telemetry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              metric: "stop_to_feedback_play_ms",
+              value_ms: delta,
+              session_id: sessionId ?? undefined,
+            }),
+          }).catch(() => {});
+
+          // eslint-disable-next-line no-console
+          console.log(
+            `stop click → FEEDBACK play: ${delta.toFixed(1)} ms`
+          );
+          feedbackAudio.removeEventListener("playing", onPlaying);
+        };
+
+        feedbackAudio.addEventListener("playing", onPlaying, { once: true });
         onFeedback(data);
-        fb.onended = () => setStatus("");
-        fb.play();
+        feedbackAudio.onended = () => setStatus("");
+        await feedbackAudio.play();
       }, delayRef.current * 1000);
       return;
     }
@@ -377,10 +409,38 @@ export function useRecorder({
               a.onended = res;
               a.play();
             });
-          const fb = new Audio("/api/audio/" + data.feedback_audio);
+          const feedbackAudio = new Audio(`/api/audio/${data.feedback_audio}`);
+          feedbackAudio.preload = "auto";
+
+          const onPlaying = () => {
+            if (stopTimingRef.current.sent) return;
+            stopTimingRef.current.feedback_play_start = performance.now();
+            const delta =
+              stopTimingRef.current.feedback_play_start -
+              (stopTimingRef.current.stop_click ??
+                stopTimingRef.current.feedback_play_start);
+            stopTimingRef.current.sent = true;
+
+            fetch("/api/telemetry", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                metric: "stop_to_feedback_play_ms",
+                value_ms: delta,
+              }),
+            }).catch(() => {});
+
+            // eslint-disable-next-line no-console
+            console.log(
+              `stop click → FEEDBACK play: ${delta.toFixed(1)} ms`
+            );
+            feedbackAudio.removeEventListener("playing", onPlaying);
+          };
+
+          feedbackAudio.addEventListener("playing", onPlaying, { once: true });
           onFeedback(data);
-          fb.onended = () => setStatus("");
-          fb.play();
+          feedbackAudio.onended = () => setStatus("");
+          await feedbackAudio.play();
         },
       (data.delay_seconds ?? 0) * 1000,
     );
