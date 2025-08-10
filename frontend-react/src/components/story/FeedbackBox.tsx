@@ -3,6 +3,7 @@ interface FeedbackBoxProps {
   isCorrect: boolean;
   onReplay: () => void;
   visible: boolean;
+  pending?: boolean;
 }
 
 export function FeedbackBox({
@@ -10,6 +11,7 @@ export function FeedbackBox({
   isCorrect,
   onReplay,
   visible,
+  pending,
 }: FeedbackBoxProps) {
   const colorClasses = isCorrect
     ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
@@ -24,6 +26,12 @@ export function FeedbackBox({
         dangerouslySetInnerHTML={{ __html: text }}
         className="text-left flex-1"
       />
+      {pending && (
+        <div className="flex items-center gap-1 text-sm text-slate-500 mr-2">
+          <i className="lucide lucide-loader-2 animate-spin" />
+          <span>Bezig met feedback…</span>
+        </div>
+      )}
       <button
         onClick={onReplay}
         className="flex items-center gap-1 px-4 py-2 rounded-full bg-primary text-white flex-shrink-0"
