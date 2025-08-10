@@ -468,7 +468,7 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
     feedback_dest = storage.STORAGE_DIR / feedback_name
 
     q = request.query_params.get("background_tts")
-    background_tts = True if q is None else q in {"1", "true", "yes"}
+    background_tts = config.BACKGROUND_TTS if q is None else q in {"1", "true", "yes"}
 
     if background_tts:
         background.add_task(_tts_background, tutor_resp.feedback_text, feedback_dest, results, sess.timeline)
