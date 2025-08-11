@@ -44,6 +44,7 @@ export function useRecorder({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const [hasSession, setHasSession] = useState(false);
   const delayRef = useRef<number>(0);
   const recordedChunksRef = useRef<Int16Array[]>([]);
   const dataArrayRef = useRef<Uint8Array | null>(null);
@@ -52,6 +53,8 @@ export function useRecorder({
   const timelineRef = useRef<Record<string, number>>({});
   const ringRef = useRef<RingBuffer | null>(null);
   const backendReadyRef = useRef(false);
+  const isStoppingRef = useRef(false);
+  const chunkLoopExitLoggedRef = useRef(false);
 
   function ensureRing(sampleRate: number) {
     const cap = Math.max(1, Math.round(sampleRate * PRE_ROLL_SEC));
@@ -72,6 +75,13 @@ export function useRecorder({
   }, []);
 
   function sendChunk(blob: Blob) {
+    if (isStoppingRef.current) {
+      if (!chunkLoopExitLoggedRef.current) {
+        console.log("chunk loop exit isStoppingRef");
+        chunkLoopExitLoggedRef.current = true;
+      }
+      return;
+    }
     if (!realtimeRef.current || !sessionIdRef.current) return;
     const form = new FormData();
     form.append("file", blob, "chunk.pcm");
@@ -80,7 +90,14 @@ export function useRecorder({
     fetch(`/api/realtime/chunk/${sessionIdRef.current}`, {
       method: "POST",
       body: form,
-    });
+    })
+      .then((r) => {
+        if (!r.ok && !(r.status === 404 && isStoppingRef.current))
+          console.error("chunk post failed", r.status);
+      })
+      .catch((err) => {
+        if (!isStoppingRef.current) console.error("chunk post error", err);
+      });
   }
 
   function drawWave(level: number) {
@@ -118,6 +135,9 @@ export function useRecorder({
   async function startRecording() {
     console.log("startRecording");
     if (!sentence) return;
+    isStoppingRef.current = false;
+    chunkLoopExitLoggedRef.current = false;
+    setHasSession(false);
     timelineRef.current = {};
     timelineRef.current.ui_click = performance.now();
     const audioCtx = new AudioContext();
@@ -144,6 +164,7 @@ export function useRecorder({
           const j = await r.json();
           if (!r.ok) throw new Error(j.detail);
           sessionIdRef.current = j.session_id;
+          setHasSession(true);
           delayRef.current = j.delay_seconds;
           timelineRef.current.start_resp_ok = performance.now();
           backendReadyRef.current = true;
@@ -172,12 +193,14 @@ export function useRecorder({
           await audioCtxRef.current?.close();
           audioCtxRef.current = null;
           ringRef.current?.clear();
+          setHasSession(false);
         }
       })();
     } else {
       sessionIdRef.current = null;
       delayRef.current = 0;
       backendReadyRef.current = true;
+      setHasSession(false);
     }
 
     let stream: MediaStream;
@@ -260,6 +283,8 @@ export function useRecorder({
 
   async function stopRecording() {
     console.log("stopRecording");
+    isStoppingRef.current = true;
+    console.log("stop: guarding with sid=", !!sessionIdRef.current);
     recordingRef.current = false;
     setRecording(false);
     backendReadyRef.current = false;
@@ -285,16 +310,29 @@ export function useRecorder({
         PCM_QUEUE.length = 0;
         sendChunk(new Blob([flat], { type: "application/octet-stream" }));
       }
-      const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, {
+      if (!sessionIdRef.current) {
+        setStatus("Unknown session");
+        console.warn("stop: unknown session");
+        isStoppingRef.current = false;
+        setHasSession(false);
+        return;
+      }
+      const sid = sessionIdRef.current;
+      const stopPromise = fetch(`/api/realtime/stop/${sid}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ client_timeline: timelineRef.current }),
-      }).then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.detail);
-        return j as FeedbackData;
-      });
-      sessionIdRef.current = null;
+      })
+        .then(async (r) => {
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.detail);
+          return j as FeedbackData;
+        })
+        .finally(() => {
+          sessionIdRef.current = null;
+          setHasSession(false);
+          isStoppingRef.current = false;
+        });
       setTimeout(async () => {
         setStatus("Feedback afspelen");
         await new Promise((res) => {
@@ -384,6 +422,7 @@ export function useRecorder({
         },
       (data.delay_seconds ?? 0) * 1000,
     );
+    isStoppingRef.current = false;
   }
 
   return {
@@ -392,6 +431,7 @@ export function useRecorder({
     playbackUrl,
     startRecording,
     stopRecording,
+    canStop: hasSession,
   };
 }
 
