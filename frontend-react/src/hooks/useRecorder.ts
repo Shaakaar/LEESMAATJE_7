@@ -52,7 +52,6 @@ export function useRecorder({
   const timelineRef = useRef<Record<string, number>>({});
   const ringRef = useRef<RingBuffer | null>(null);
   const backendReadyRef = useRef(false);
-  const stopInitiatedRef = useRef(false);
 
   function ensureRing(sampleRate: number) {
     const cap = Math.max(1, Math.round(sampleRate * PRE_ROLL_SEC));
@@ -81,15 +80,7 @@ export function useRecorder({
     fetch(`/api/realtime/chunk/${sessionIdRef.current}`, {
       method: "POST",
       body: form,
-    })
-      .then((r) => {
-        if (!r.ok && !(r.status === 404 && stopInitiatedRef.current)) {
-          console.error("chunk upload failed", r.statusText);
-        }
-      })
-      .catch((err) => {
-        console.error("chunk upload error", err);
-      });
+    });
   }
 
   function drawWave(level: number) {
@@ -129,7 +120,6 @@ export function useRecorder({
     if (!sentence) return;
     timelineRef.current = {};
     timelineRef.current.ui_click = performance.now();
-    stopInitiatedRef.current = false;
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
     sampleRateRef.current = audioCtx.sampleRate;
@@ -270,7 +260,6 @@ export function useRecorder({
 
   async function stopRecording() {
     console.log("stopRecording");
-    stopInitiatedRef.current = true;
     recordingRef.current = false;
     setRecording(false);
     backendReadyRef.current = false;
@@ -285,10 +274,6 @@ export function useRecorder({
     audioCtxRef.current = null;
     setStatus("Analyseren");
     if (realtimeRef.current) {
-      if (!sessionIdRef.current) {
-        console.warn("stopRecording called with no session");
-        return;
-      }
       if (PCM_QUEUE.length) {
         const total = PCM_QUEUE.reduce((n, c) => n + c.length, 0);
         const flat = new Int16Array(total);

@@ -20,13 +20,6 @@ console = Console()
 DEBUG_CHUNKS = False
 DEBUG_TIMELINE = bool(os.getenv("DEBUG_TIMELINE"))
 
-# Minimum duration of audio (in milliseconds) that we consider
-# meaningful. Shorter takes trigger a deterministic response.
-MIN_SHORT_TAKE_MS = 250
-# The recorder writes 16‑bit PCM at this rate; keep the constant in sync
-# with the frontend recorder.
-SAMPLE_RATE = 48000
-
 
 class Timeline:
     """Collect coarse timing marks relative to instantiation."""
@@ -174,8 +167,6 @@ class RealtimeSession:
         self.wavefile.setsampwidth(2)
         self.wavefile.setframerate(self.sample_rate)
         self.chunk_count = 0
-        self.bytes_written = 0
-        self.samples_written = 0
 
         if config.KEEP_AZURE_RUNNING:
             if (
@@ -299,8 +290,6 @@ class RealtimeSession:
         """Add a chunk of 16‑bit mono PCM data."""
         arr = np.frombuffer(pcm_data, dtype=np.int16)
         self.chunk_count += 1
-        self.bytes_written += len(pcm_data)
-        self.samples_written += len(arr)
         if self.chunk_count == 1 and self.timeline:
             self.timeline.mark("first_chunk_received")
         if DEBUG_CHUNKS:
@@ -331,13 +320,6 @@ class RealtimeSession:
             self.asr_thread.eor_event.wait()
 
         self.wavefile.close()
-        duration_ms = (self.samples_written / SAMPLE_RATE) * 1000
-        metrics = {
-            "samples_written": self.samples_written,
-            "duration_ms": duration_ms,
-            "short_take": self.samples_written == 0 or duration_ms < MIN_SHORT_TAKE_MS,
-        }
-        self.results["metrics"] = metrics
 
         # Offline modes still run synchronously on the recorded file.
         if not self.phon_thread.realtime:
@@ -379,11 +361,6 @@ class RealtimeSession:
         )
         self.results["end_time"] = time.time()
         self.last_used = self.results["end_time"]
-        if metrics["short_take"]:
-            console.log(
-                f"Backend short-take: samples={self.samples_written}, dur_ms={duration_ms:.1f}"
-            )
-            return self.results
 
         req, messages = prompt_builder.build(self.results, state={})
 
