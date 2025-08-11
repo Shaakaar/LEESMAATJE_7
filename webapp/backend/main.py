@@ -125,6 +125,12 @@ def _print_timeline(results: dict) -> None:
         if d is not None:
             print(f"  {label}: {d:.1f} ms")
 
+    metrics = results.get("metrics")
+    if metrics:
+        print("\nMetrics:")
+        for k, v in metrics.items():
+            print(f"  {k}: {v}")
+
 
 @app.post("/api/register")
 async def register(username: str = Form(...), password: str = Form(...)):
@@ -383,6 +389,7 @@ async def realtime_start(
 async def realtime_chunk(sid: str, file: UploadFile = File(...)):
     sess = sessions.get(sid)
     if not sess:
+        console.log(f"late chunk ignored for sid={sid}")
         raise HTTPException(status_code=404, detail="Unknown session")
     data = await file.read()
     sess.add_chunk(data)
@@ -414,6 +421,33 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
         sess.timeline.mark("json_ready")
         results["timeline_backend"] = sess.timeline.to_dict()
     _print_timeline(results)
+    metrics = results.get("metrics", {})
+    if metrics.get("short_take"):
+        console.log(f"/stop short take for sid={sid}")
+        from .tts import tts_to_file
+        feedback_text = (
+            "Ik hoorde het niet helemaal duidelijk. Lees de zin nog eens, alsjeblieft."
+        )
+        feedback_audio = tts_to_file(feedback_text)
+        dest_audio = storage.STORAGE_DIR / f"{results['session_id']}.wav"
+        shutil.move(results["audio_file"], dest_audio)
+        storage.save_result(
+            sess.teacher_id,
+            sess.student_id,
+            results,
+            str(dest_audio),
+            "{}",
+        )
+        return JSONResponse(
+            {
+                "feedback_text": feedback_text,
+                "feedback_audio": os.path.basename(feedback_audio),
+                "correct": False,
+                "errors": [],
+                "delay_seconds": config.DELAY_SECONDS,
+            }
+        )
+
     req, messages = prompt_builder.build(results, state={})
     tutor_resp = await gpt_client.chat(messages)
     from .tts import tts_to_file
