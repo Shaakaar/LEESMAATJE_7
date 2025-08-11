@@ -6,7 +6,6 @@ interface RecordControlsProps {
   onPlayback: () => void;
   status: string;
   canvasRef: React.RefObject<HTMLCanvasElement>;
-  canStop: boolean;
 }
 
 export function RecordControls({
@@ -17,7 +16,6 @@ export function RecordControls({
   onPlayback,
   status,
   canvasRef,
-  canStop,
 }: RecordControlsProps) {
   return (
     <div className="flex flex-col items-center mt-4">
@@ -30,8 +28,7 @@ export function RecordControls({
         />
         <button
           onClick={recording ? onStop : onRecord}
-          disabled={recording && !canStop}
-          className={`w-28 h-28 rounded-full flex flex-col items-center justify-center bg-primary text-white ${recording ? "shadow-inner" : ""} disabled:opacity-50`}
+          className={`w-28 h-28 rounded-full flex flex-col items-center justify-center bg-primary text-white ${recording ? "shadow-inner" : ""}`}
         >
           <i className="lucide lucide-mic text-4xl" />
           <span className="label mt-1 text-sm">
