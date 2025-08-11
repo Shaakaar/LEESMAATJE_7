@@ -6,7 +6,6 @@ from fastapi import (
     Form,
     Request,
     BackgroundTasks,
-    Response,
 )
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
@@ -18,8 +17,6 @@ import tempfile
 import shutil
 import sqlite3
 import asyncio
-import time
-from pathlib import Path
 from rich.console import Console
 
 from . import config, storage
@@ -111,8 +108,6 @@ def _print_timeline(results: dict) -> None:
         ("first_chunk_received", "azure_first_write", "azure first write"),
         ("w2v2_ready_ph", "w2v2_first_decode", "w2v2 first decode"),
         ("/stop_in", "json_ready", "/stop roundtrip"),
-        ("gpt_req_start", "gpt_resp_ok", "GPT latency"),
-        ("tts_start", "tts_done", "TTS synth"),
     ]:
         d = _delta(tb, a, b)
         if d is not None:
@@ -129,24 +124,6 @@ def _print_timeline(results: dict) -> None:
         d = _delta(tf, a, b)
         if d is not None:
             print(f"  {label}: {d:.1f} ms")
-
-    v = results.get("frontend_stop_to_feedback_ms")
-    if isinstance(v, (int, float)):
-        print(f"\nstop click → FEEDBACK play: {v:.1f} ms")
-
-
-def _tts_background(text: str, dest: os.PathLike[str] | str, results: dict, timeline) -> None:
-    """Generate TTS in the background and log timings."""
-    from .tts import tts_to_file
-
-    if timeline:
-        timeline.mark("tts_start")
-    tmp = tts_to_file(text)
-    shutil.move(tmp, dest)
-    if timeline:
-        timeline.mark("tts_done")
-        results["timeline_backend"] = timeline.to_dict()
-        _print_timeline(results)
 
 
 @app.post("/api/register")
@@ -362,55 +339,19 @@ async def process(
 
 @app.get("/api/audio/{name}")
 async def get_audio(name: str):
-    candidates = [
-        os.path.join(tempfile.gettempdir(), name),
-        Path(storage.STORAGE_DIR) / name,
-        Path(storage.STORAGE_DIR) / "words" / name,
-    ]
-    for p in candidates:
-        p = str(p)
-        if os.path.exists(p):
-            return FileResponse(
-                p,
-                media_type="audio/wav",
-                headers={"Cache-Control": "public, max-age=86400"},
-            )
+    temp_path = os.path.join(tempfile.gettempdir(), name)
+    if os.path.exists(temp_path):
+        return FileResponse(temp_path, media_type="audio/wav")
+    stored = storage.STORAGE_DIR / name
+    if stored.exists():
+        return FileResponse(stored, media_type="audio/wav")
+    # Word-level TTS files are cached in a dedicated subdirectory.  When the
+    # frontend requests a file like ``/api/audio/de.wav`` we need to look for it
+    # in that cache as well.
+    word_path = storage.STORAGE_DIR / "words" / name
+    if word_path.exists():
+        return FileResponse(word_path, media_type="audio/wav")
     raise HTTPException(status_code=404, detail="Audio not found")
-
-
-@app.head("/api/audio/{name}")
-async def head_audio(name: str):
-    candidates = [
-        os.path.join(tempfile.gettempdir(), name),
-        Path(storage.STORAGE_DIR) / name,
-        Path(storage.STORAGE_DIR) / "words" / name,
-    ]
-    for p in candidates:
-        if os.path.exists(p):
-            return Response(
-                status_code=200,
-                headers={
-                    "Content-Type": "audio/wav",
-                    "Cache-Control": "public, max-age=86400",
-                },
-            )
-    raise HTTPException(status_code=404, detail="Audio not found")
-
-
-@app.post("/api/telemetry")
-async def telemetry(request: Request):
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = {}
-    metric = payload.get("metric")
-    value_ms = payload.get("value_ms")
-    if isinstance(metric, str) and isinstance(value_ms, (int, float)):
-        try:
-            print(f"Frontend metric: {metric} — {float(value_ms):.1f} ms")
-        except Exception:
-            pass
-    return {"status": "ok"}
 
 
 @app.post("/api/realtime/start")
@@ -450,13 +391,6 @@ async def realtime_chunk(sid: str, file: UploadFile = File(...)):
 
 @app.post("/api/realtime/stop/{sid}")
 async def realtime_stop(sid: str, request: Request, background: BackgroundTasks):
-    """Stop a realtime session.
-
-    Accepts an optional ``background_tts`` query parameter.  When omitted or
-    truthy, text-to-speech generation runs in a background task and the handler
-    returns immediately with ``status: 'pending'``.
-    """
-    start_time = time.perf_counter()
     sess = sessions.pop(sid, None)
     if not sess:
         raise HTTPException(status_code=404, detail="Unknown session")
@@ -479,31 +413,12 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
     if sess.timeline:
         sess.timeline.mark("json_ready")
         results["timeline_backend"] = sess.timeline.to_dict()
+    _print_timeline(results)
     req, messages = prompt_builder.build(results, state={})
-    if sess.timeline:
-        sess.timeline.mark("gpt_req_start")
     tutor_resp = await gpt_client.chat(messages)
-    if sess.timeline:
-        sess.timeline.mark("gpt_resp_ok")
     from .tts import tts_to_file
 
-    feedback_name = f"{results['session_id']}_fb.wav"
-    feedback_dest = storage.STORAGE_DIR / feedback_name
-
-    q = request.query_params.get("background_tts")
-    background_tts = config.BACKGROUND_TTS if q is None else q in {"1", "true", "yes"}
-
-    if background_tts:
-        background.add_task(_tts_background, tutor_resp.feedback_text, feedback_dest, results, sess.timeline)
-    else:
-        if sess.timeline:
-            sess.timeline.mark("tts_start")
-        tmp_fb = tts_to_file(tutor_resp.feedback_text)
-        shutil.move(tmp_fb, feedback_dest)
-        if sess.timeline:
-            sess.timeline.mark("tts_done")
-            results["timeline_backend"] = sess.timeline.to_dict()
-            _print_timeline(results)
+    feedback_audio = tts_to_file(tutor_resp.feedback_text)
 
     results["correct"] = tutor_resp.is_correct
 
@@ -516,27 +431,15 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
         str(dest_audio),
         req.model_dump_json(),
     )
-    timeline_dict = sess.timeline.to_dict() if sess.timeline else {}
-    gpt_ms = None
-    tts_ms = None
-    if "gpt_req_start" in timeline_dict and "gpt_resp_ok" in timeline_dict:
-        gpt_ms = int(timeline_dict["gpt_resp_ok"] - timeline_dict["gpt_req_start"])
-    if not background_tts and "tts_start" in timeline_dict and "tts_done" in timeline_dict:
-        tts_ms = int(timeline_dict["tts_done"] - timeline_dict["tts_start"])
-    server_stop_ms = int((time.perf_counter() - start_time) * 1000)
-    payload = {
-        "feedback_text": tutor_resp.feedback_text,
-        "feedback_audio": feedback_name,
-        "correct": tutor_resp.is_correct,
-        "errors": [e.model_dump(by_alias=True) for e in tutor_resp.errors],
-        "delay_seconds": config.DELAY_SECONDS,
-        "status": "pending" if background_tts else "ready",
-        "server_stop_ms": server_stop_ms,
-        "gpt_ms": gpt_ms,
-    }
-    if tts_ms is not None:
-        payload["tts_ms"] = tts_ms
-    return JSONResponse(payload)
+    return JSONResponse(
+        {
+            "feedback_text": tutor_resp.feedback_text,
+            "feedback_audio": os.path.basename(feedback_audio),
+            "correct": tutor_resp.is_correct,
+            "errors": [e.model_dump(by_alias=True) for e in tutor_resp.errors],
+            "delay_seconds": config.DELAY_SECONDS,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------

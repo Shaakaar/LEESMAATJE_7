@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { RingBuffer } from "../utils/ringBuffer";
-import { audioQueue } from "../utils/audioQueue";
 
 const SEND_INTERVAL_MS = 100; // how often to upload audio (in ms)
 const DEBUG = false; // set true to enable chunk logs
@@ -15,10 +14,6 @@ export interface FeedbackData {
   feedback_audio: string;
   errors?: { word?: string; expected_word?: string }[];
   correct?: boolean;
-  status?: string;
-  server_stop_ms?: number;
-  gpt_ms?: number | null;
-  tts_ms?: number | null;
 }
 
 interface RecorderOptions {
@@ -49,6 +44,7 @@ export function useRecorder({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const delayRef = useRef<number>(0);
   const recordedChunksRef = useRef<Int16Array[]>([]);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -148,6 +144,7 @@ export function useRecorder({
           const j = await r.json();
           if (!r.ok) throw new Error(j.detail);
           sessionIdRef.current = j.session_id;
+          delayRef.current = j.delay_seconds;
           timelineRef.current.start_resp_ok = performance.now();
           backendReadyRef.current = true;
           const ring = ensureRing(sampleRateRef.current ?? audioCtx.sampleRate);
@@ -179,6 +176,7 @@ export function useRecorder({
       })();
     } else {
       sessionIdRef.current = null;
+      delayRef.current = 0;
       backendReadyRef.current = true;
     }
 
@@ -262,7 +260,6 @@ export function useRecorder({
 
   async function stopRecording() {
     console.log("stopRecording");
-    const tStop = Date.now();
     recordingRef.current = false;
     setRecording(false);
     backendReadyRef.current = false;
@@ -275,36 +272,7 @@ export function useRecorder({
     const sampleRate = sampleRateRef.current ?? 48000;
     await audioCtxRef.current?.close();
     audioCtxRef.current = null;
-
-    const fillerUrl = `/api/audio/${FILLER_AUDIO}`;
-    const refUrl = sentenceAudio ? `/api/audio/${sentenceAudio}` : null;
-    setStatus("Feedback afspelen");
-    const preStartPromise = audioQueue.enqueue(fillerUrl, {
-      waitReady: true,
-      readyUrl: fillerUrl,
-    });
-    if (refUrl)
-      audioQueue.enqueue(refUrl, { waitReady: true, readyUrl: refUrl });
-
-    const sessionId = sessionIdRef.current;
-    const params = new URLSearchParams(window.location.search);
-    const backgroundTts = params.get("background_tts") !== "0";
-    const sendMetric = (metric: string, value: number) => {
-      fetch("/api/telemetry", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          metric,
-          value_ms: value,
-          session_id: sessionId ?? undefined,
-        }),
-      }).catch(() => {});
-      // eslint-disable-next-line no-console
-      console.log(`METRIC ${metric}: ${value.toFixed(1)} ms`);
-    };
-
-    let stopPromise: Promise<FeedbackData> | null = null;
-    let processPromise: Promise<FeedbackData & { delay_seconds: number }> | null = null;
+    setStatus("Analyseren");
     if (realtimeRef.current) {
       if (PCM_QUEUE.length) {
         const total = PCM_QUEUE.reduce((n, c) => n + c.length, 0);
@@ -317,99 +285,105 @@ export function useRecorder({
         PCM_QUEUE.length = 0;
         sendChunk(new Blob([flat], { type: "application/octet-stream" }));
       }
-      stopPromise = fetch(
-        `/api/realtime/stop/${sessionId}?background_tts=${backgroundTts ? 1 : 0}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ client_timeline: timelineRef.current }),
-        },
-      ).then(async (r) => {
+      const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_timeline: timelineRef.current }),
+      }).then(async (r) => {
         const j = await r.json();
         if (!r.ok) throw new Error(j.detail);
         return j as FeedbackData;
       });
       sessionIdRef.current = null;
-      const total = recordedChunksRef.current.reduce(
-        (n, c) => n + c.length,
-        0,
-      );
-      const flat = new Int16Array(total);
-      let pos = 0;
-      for (const c of recordedChunksRef.current) {
-        flat.set(c, pos);
-        pos += c.length;
-      }
-      const wav = encodeWav(flat, sampleRate);
-      setPlaybackUrl(URL.createObjectURL(wav));
-    } else {
-      const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
-      const flat = new Int16Array(total);
-      let pos = 0;
-      for (const c of recordedChunksRef.current) {
-        flat.set(c, pos);
-        pos += c.length;
-      }
-      const wav = encodeWav(flat, sampleRate);
-      setPlaybackUrl(URL.createObjectURL(wav));
-      const fd = new FormData();
-      fd.append("file", wav, "audio.wav");
-      fd.append("sentence", sentence);
-      fd.append("teacher_id", String(teacherId));
-      fd.append("student_id", studentId);
-      processPromise = fetch("/api/process", { method: "POST", body: fd }).then(
-        async (r) => {
-          const j = await r.json();
-          if (!r.ok) throw new Error(j.detail);
-          return j as FeedbackData & { delay_seconds: number };
-        },
-      );
-    }
-
-    const tPreStart = await preStartPromise;
-    sendMetric("stop_to_preroll_start_ms", tPreStart - tStop);
-
-    if (stopPromise) {
-      stopPromise
-        .then((data) => {
-          onFeedback(data);
-          const tJson = Date.now();
-          sendMetric("stop_to_json_ms", tJson - tStop);
-          const fbUrl = `/api/audio/${data.feedback_audio}`;
-          const fbPlayPromise = audioQueue.enqueue(fbUrl, {
-            waitReady: backgroundTts,
-            readyUrl: fbUrl,
-            readyTimeoutMs: 5000,
-          });
-          fbPlayPromise.then((tFbPlay) => {
-            sendMetric("stop_to_feedback_play_ms", tFbPlay - tStop);
-            sendMetric("json_to_feedback_play_ms", tFbPlay - tJson);
-            setStatus("");
-          });
-        })
-        .catch((err) => {
-          setStatus("Fout: " + (err as Error).message);
+      setTimeout(async () => {
+        setStatus("Feedback afspelen");
+        await new Promise((res) => {
+          const a = new Audio("/api/audio/" + FILLER_AUDIO);
+          a.onended = res;
+          a.play();
         });
+        if (sentenceAudio)
+          await new Promise((res) => {
+            const a = new Audio("/api/audio/" + sentenceAudio);
+            a.onended = res;
+            a.play();
+          });
+        let data: FeedbackData;
+        try {
+          data = await stopPromise;
+        } catch (err) {
+          setStatus("Fout: " + (err as Error).message);
+          return;
+        }
+        const total = recordedChunksRef.current.reduce(
+          (n, c) => n + c.length,
+          0,
+        );
+        const flat = new Int16Array(total);
+        let pos = 0;
+        for (const c of recordedChunksRef.current) {
+          flat.set(c, pos);
+          pos += c.length;
+        }
+        const wav = encodeWav(flat, sampleRate);
+        console.log("final wav blob", wav.size, "bytes");
+        const url = URL.createObjectURL(wav);
+        setPlaybackUrl(url);
+        const fb = new Audio("/api/audio/" + data.feedback_audio);
+        onFeedback(data);
+        fb.onended = () => setStatus("");
+        fb.play();
+      }, delayRef.current * 1000);
       return;
     }
 
-    if (processPromise) {
-      let data: FeedbackData & { delay_seconds: number };
-      try {
-        data = await processPromise;
-      } catch (err) {
-        setStatus("Fout: " + (err as Error).message);
-        return;
-      }
-      onFeedback(data);
-      const tFbPlay = await audioQueue.enqueue(`/api/audio/${data.feedback_audio}`, {
-        waitReady: true,
-        readyUrl: `/api/audio/${data.feedback_audio}`,
-        readyTimeoutMs: 5000,
-      });
-      sendMetric("stop_to_feedback_play_ms", tFbPlay - tStop);
-      setStatus("");
+    // Offline mode: process the full recording in one request
+    const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
+    const flat = new Int16Array(total);
+    let pos = 0;
+    for (const c of recordedChunksRef.current) {
+      flat.set(c, pos);
+      pos += c.length;
     }
+    const wav = encodeWav(flat, sampleRate);
+    const fd = new FormData();
+    fd.append("file", wav, "audio.wav");
+    fd.append("sentence", sentence);
+    fd.append("teacher_id", String(teacherId));
+    fd.append("student_id", studentId);
+    let data: FeedbackData & { delay_seconds: number };
+    try {
+      const r = await fetch("/api/process", { method: "POST", body: fd });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail);
+      data = j;
+    } catch (err) {
+      setStatus("Fout: " + (err as Error).message);
+      return;
+    }
+    const url = URL.createObjectURL(wav);
+    setPlaybackUrl(url);
+    setTimeout(
+        async () => {
+          setStatus("Feedback afspelen");
+          await new Promise((res) => {
+            const a = new Audio("/api/audio/" + FILLER_AUDIO);
+            a.onended = res;
+            a.play();
+          });
+          if (sentenceAudio)
+            await new Promise((res) => {
+              const a = new Audio("/api/audio/" + sentenceAudio);
+              a.onended = res;
+              a.play();
+            });
+          const fb = new Audio("/api/audio/" + data.feedback_audio);
+          onFeedback(data);
+          fb.onended = () => setStatus("");
+          fb.play();
+        },
+      (data.delay_seconds ?? 0) * 1000,
+    );
   }
 
   return {
