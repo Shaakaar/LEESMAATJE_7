@@ -33,6 +33,7 @@ export default function StoryPage() {
     playbackUrl,
     startRecording: recorderStart,
     stopRecording: recorderStop,
+    canStop,
   } = useRecorder({
     sentence: sentenceText,
     sentenceAudio:
@@ -138,6 +139,7 @@ export default function StoryPage() {
             onPlayback={playRecorded}
             status={status}
             canvasRef={canvasRef}
+            canStop={canStop}
           />
         )}
         <div className="flex justify-between mt-4">
