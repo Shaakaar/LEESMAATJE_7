@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ShimmerText } from './ShimmerText';
 
 export default function LoadingOverlay({ show }: { show: boolean }) {
   return (
@@ -12,7 +13,10 @@ export default function LoadingOverlay({ show }: { show: boolean }) {
       )}
     >
       <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      <p className="mt-4 font-title text-primary">Modellen laden…</p>
+      <ShimmerText
+        text="Modellen laden…"
+        className="mt-4 font-title text-primary"
+      />
     </div>
   );
 }

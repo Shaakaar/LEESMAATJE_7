@@ -9,6 +9,31 @@ let lastSend = 0;
 const PREBUFFER_MAX_MS = 10000; // safety cap, 10s
 type RecState = "idle" | "starting" | "streaming" | "stopping";
 
+export type TutorPhase =
+  | "idle"
+  | "recording"
+  | "playing-filler"
+  | "building-feedback"
+  | "playing-feedback"
+  | "error";
+
+export function getStatusLabel(phase: TutorPhase): string {
+  switch (phase) {
+    case "recording":
+      return "Opnemen…";
+    case "playing-filler":
+      return "Zin afspelen…";
+    case "building-feedback":
+      return "Feedback maken…";
+    case "playing-feedback":
+      return "Feedback afspelen…";
+    case "error":
+      return "Er ging iets mis — probeer opnieuw.";
+    default:
+      return "";
+  }
+}
+
 const FILLER_AUDIO = "de_zin_was.wav";
 
 async function playSequentially(
@@ -84,7 +109,7 @@ export function useRecorder({
 }: RecorderOptions) {
   const recordingRef = useRef(false); // for audio-thread guard
   const [recording, setRecording] = useState(false); // UI only
-  const [status, setStatus] = useState("");
+  const [phase, setPhase] = useState<TutorPhase>("idle");
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -242,9 +267,7 @@ export function useRecorder({
           }
         } catch (err) {
           console.error("start failed", err);
-          setStatus(
-            "Fout: " + (err instanceof Error ? err.message : String(err)),
-          );
+          setPhase("error");
           recordingRef.current = false;
           setRecording(false);
           processorRef.current?.disconnect();
@@ -268,7 +291,8 @@ export function useRecorder({
       timelineRef.current.mic_ready = performance.now();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setStatus("Fout: " + message);
+      console.error("mic access failed", message);
+      setPhase("error");
       await audioCtx.close();
       audioCtxRef.current = null;
       return;
@@ -289,7 +313,7 @@ export function useRecorder({
       timelineRef.current.worklet_loaded = performance.now();
     } catch (err) {
       console.error("Error loading audio worklet module", err);
-      setStatus("Fout: " + (err instanceof Error ? err.message : String(err)));
+      setPhase("error");
       return;
     }
     const processor = new AudioWorkletNode(audioCtx, "pcm-processor");
@@ -337,7 +361,7 @@ export function useRecorder({
     setPlaybackUrl(null);
     recordingRef.current = true;
     setRecording(true);
-    setStatus("Opnemen");
+    setPhase("recording");
     visualize();
   }
 
@@ -348,7 +372,7 @@ export function useRecorder({
     preRollAbortRef.current = ac;
     preRollPlayingRef.current = true;
     console.log("PREROLL start");
-    setStatus("Feedback afspelen");
+    setPhase("playing-filler");
     const seq: { handle: AudioHandle; log: string }[] = [
       { handle: getAudioEl(FILLER_AUDIO), log: "PREROLL filler.play" },
     ];
@@ -363,6 +387,7 @@ export function useRecorder({
       const fn = pendingFeedbackRef.current;
       pendingFeedbackRef.current = null;
       if (fn) fn();
+      else setPhase("building-feedback");
     });
   }
 
@@ -385,7 +410,6 @@ export function useRecorder({
     const sampleRate = sampleRateRef.current ?? 48000;
     await audioCtxRef.current?.close();
     audioCtxRef.current = null;
-    setStatus("Analyseren");
 
     let feedbackPromise: Promise<FeedbackData>;
     if (realtimeRef.current) {
@@ -462,10 +486,11 @@ export function useRecorder({
         const fb = getAudioEl(data.feedback_audio);
         fb.onended = () => {
           activeAudiosRef.current.delete(fb);
-          setStatus("");
+          setPhase("idle");
         };
         const playFb = () => {
           console.log("FEEDBACK play_start");
+          setPhase("playing-feedback");
           fb.currentTime = 0;
           activeAudiosRef.current.add(fb);
           fb.play().catch(() => {});
@@ -474,10 +499,10 @@ export function useRecorder({
         else playFb();
       })
       .catch((err) => {
-        const showErr = () =>
-          setStatus(
-            "Fout: " + (err instanceof Error ? err.message : String(err)),
-          );
+        const showErr = () => {
+          console.error(err);
+          setPhase("error");
+        };
         if (preRollPlayingRef.current) pendingFeedbackRef.current = showErr;
         else showErr();
       });
@@ -485,9 +510,12 @@ export function useRecorder({
     recStateRef.current = "idle";
   }
 
+  const statusLabel = getStatusLabel(phase);
+
   return {
     recording,
-    status,
+    phase,
+    statusLabel,
     playbackUrl,
     startRecording,
     stopRecording,
