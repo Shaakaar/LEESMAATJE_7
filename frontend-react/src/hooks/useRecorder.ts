@@ -155,8 +155,8 @@ export function useRecorder({
         await new Promise<void>((res) => {
           const a = new Audio(src);
           state.audios.push(a);
-          a.onended = res;
-          a.onerror = res;
+          a.onended = () => res();
+          a.onerror = () => res();
           a.play();
         });
       };
