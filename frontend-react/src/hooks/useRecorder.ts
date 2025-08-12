@@ -12,6 +12,8 @@ const FILLER_AUDIO = "de_zin_was.wav";
 
 type AudioHandle = HTMLAudioElement;
 const audioCache = new Map<string, AudioHandle>();
+const audioReady = new Set<string>();
+const audioReadyPromises = new Map<string, Promise<void>>();
 
 function getAudioEl(name: string): AudioHandle {
   let h = audioCache.get(name);
@@ -21,6 +23,29 @@ function getAudioEl(name: string): AudioHandle {
     audioCache.set(name, h);
   }
   return h;
+}
+
+function preloadAudio(name: string): Promise<void> {
+  if (audioReady.has(name)) return Promise.resolve();
+  let p = audioReadyPromises.get(name);
+  if (!p) {
+    const el = getAudioEl(name);
+    p = new Promise<void>((res) => {
+      const done = () => {
+        el.removeEventListener("canplaythrough", done);
+        audioReady.add(name);
+        res();
+      };
+      if (el.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) done();
+      else el.addEventListener("canplaythrough", done, { once: true });
+    });
+    audioReadyPromises.set(name, p);
+  }
+  return p;
+}
+
+export function preloadAudios(names: string[]): Promise<void[]> {
+  return Promise.all(names.map(preloadAudio));
 }
 
 async function playSequentially(
@@ -361,20 +386,28 @@ export function useRecorder({
     preRollPlayingRef.current = true;
     console.log("PREROLL start");
     setStatus("Feedback afspelen");
-    const seq: { handle: AudioHandle; log: string }[] = [
-      { handle: getAudioEl(FILLER_AUDIO), log: "PREROLL filler.play" },
-    ];
-    if (sentenceAudio)
-      seq.push({
-        handle: getAudioEl(sentenceAudio),
-        log: "PREROLL reference.play",
+    const waiters = [preloadAudio(FILLER_AUDIO)];
+    if (sentenceAudio) waiters.push(preloadAudio(sentenceAudio));
+    Promise.all(waiters).then(() => {
+      if (ac.signal.aborted) {
+        preRollPlayingRef.current = false;
+        return;
+      }
+      const seq: { handle: AudioHandle; log: string }[] = [
+        { handle: getAudioEl(FILLER_AUDIO), log: "PREROLL filler.play" },
+      ];
+      if (sentenceAudio)
+        seq.push({
+          handle: getAudioEl(sentenceAudio),
+          log: "PREROLL reference.play",
+        });
+      playSequentially(seq, activeAudiosRef.current, ac.signal).finally(() => {
+        preRollPlayingRef.current = false;
+        console.log("PREROLL done");
+        const fn = pendingFeedbackRef.current;
+        pendingFeedbackRef.current = null;
+        if (fn) fn();
       });
-    playSequentially(seq, activeAudiosRef.current, ac.signal).finally(() => {
-      preRollPlayingRef.current = false;
-      console.log("PREROLL done");
-      const fn = pendingFeedbackRef.current;
-      pendingFeedbackRef.current = null;
-      if (fn) fn();
     });
   }
 
