@@ -18,9 +18,18 @@ export function ShimmerText({
       role="status"
       aria-busy={active}
       aria-live={ariaLive ?? 'polite'}
-      className={cn(className, active && 'animate-shimmer')}
+      className={cn('relative inline-block align-baseline', className)}
     >
-      {text}
+      <span>{text}</span>
+      <span
+        aria-hidden="true"
+        className={cn(
+          'absolute inset-0 pointer-events-none select-none',
+          active && 'animate-shimmer'
+        )}
+      >
+        {text}
+      </span>
     </span>
   );
 }
