@@ -10,6 +10,66 @@ type RecState = "idle" | "starting" | "streaming" | "stopping";
 
 const FILLER_AUDIO = "de_zin_was.wav";
 
+type AudioHandle = HTMLAudioElement;
+const audioCache = new Map<string, AudioHandle>();
+
+function getAudioEl(name: string): AudioHandle {
+  let h = audioCache.get(name);
+  if (!h) {
+    h = new Audio(`/api/audio/${name}`);
+    h.preload = "auto";
+    audioCache.set(name, h);
+  }
+  return h;
+}
+
+async function playSequentially(
+  items: { handle: AudioHandle; log: string }[],
+  active: Set<AudioHandle>,
+  signal?: AbortSignal,
+): Promise<void> {
+  for (const { handle, log } of items) {
+    if (signal?.aborted) return;
+    console.log(log);
+    handle.currentTime = 0;
+    active.add(handle);
+    await handle.play().catch(() => {});
+    await new Promise<void>((res) => {
+      const done = () => {
+        handle.removeEventListener("ended", done);
+        signal?.removeEventListener("abort", abort);
+        active.delete(handle);
+        res();
+      };
+      const abort = () => {
+        handle.removeEventListener("ended", done);
+        signal?.removeEventListener("abort", abort);
+        active.delete(handle);
+        res();
+      };
+      if (signal?.aborted) {
+        abort();
+        return;
+      }
+      handle.addEventListener("ended", done, { once: true });
+      signal?.addEventListener("abort", abort, { once: true });
+    });
+  }
+}
+
+function stopAllAudio(active: Set<AudioHandle>) {
+  active.forEach((a) => {
+    a.pause();
+    a.currentTime = 0;
+  });
+  if (typeof document !== "undefined")
+    document.querySelectorAll("audio").forEach((el) => {
+      (el as HTMLAudioElement).pause();
+      (el as HTMLAudioElement).currentTime = 0;
+    });
+  active.clear();
+}
+
 export interface FeedbackData {
   feedback_text: string;
   feedback_audio: string;
@@ -56,6 +116,10 @@ export function useRecorder({
   const tRecordClickRef = useRef(0);
   const startPromiseRef = useRef<Promise<string> | null>(null);
   const pendingStopRef = useRef(false);
+  const activeAudiosRef = useRef<Set<AudioHandle>>(new Set());
+  const preRollAbortRef = useRef<AbortController | null>(null);
+  const preRollPlayingRef = useRef(false);
+  const pendingFeedbackRef = useRef<(() => void) | null>(null);
 
   function ensureRing(sampleRate: number) {
     const cap = Math.max(
@@ -76,6 +140,14 @@ export function useRecorder({
         realtimeRef.current = !!cfg.realtime;
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const activeSet = activeAudiosRef.current;
+    return () => {
+      preRollAbortRef.current?.abort();
+      stopAllAudio(activeSet);
+    };
   }, []);
 
   function sendChunk(blob: Blob) {
@@ -124,6 +196,10 @@ export function useRecorder({
 
   async function startRecording() {
     console.log("startRecording");
+    preRollAbortRef.current?.abort();
+    stopAllAudio(activeAudiosRef.current);
+    preRollPlayingRef.current = false;
+    pendingFeedbackRef.current = null;
     if (!sentence) return;
     timelineRef.current = {};
     timelineRef.current.ui_click = performance.now();
@@ -277,12 +353,38 @@ export function useRecorder({
     visualize();
   }
 
+  function startPreRoll() {
+    preRollAbortRef.current?.abort();
+    stopAllAudio(activeAudiosRef.current);
+    const ac = new AbortController();
+    preRollAbortRef.current = ac;
+    preRollPlayingRef.current = true;
+    console.log("PREROLL start");
+    setStatus("Feedback afspelen");
+    const seq: { handle: AudioHandle; log: string }[] = [
+      { handle: getAudioEl(FILLER_AUDIO), log: "PREROLL filler.play" },
+    ];
+    if (sentenceAudio)
+      seq.push({
+        handle: getAudioEl(sentenceAudio),
+        log: "PREROLL reference.play",
+      });
+    playSequentially(seq, activeAudiosRef.current, ac.signal).finally(() => {
+      preRollPlayingRef.current = false;
+      console.log("PREROLL done");
+      const fn = pendingFeedbackRef.current;
+      pendingFeedbackRef.current = null;
+      if (fn) fn();
+    });
+  }
+
   async function stopRecording() {
     console.log("stopRecording");
     if (recStateRef.current === "starting") {
       pendingStopRef.current = true;
       return;
     }
+    if (recStateRef.current !== "streaming") return;
     recStateRef.current = "stopping";
     recordingRef.current = false;
     setRecording(false);
@@ -296,6 +398,8 @@ export function useRecorder({
     await audioCtxRef.current?.close();
     audioCtxRef.current = null;
     setStatus("Analyseren");
+
+    let feedbackPromise: Promise<FeedbackData>;
     if (realtimeRef.current) {
       if (PCM_QUEUE.length) {
         const total = PCM_QUEUE.reduce((n, c) => n + c.length, 0);
@@ -308,106 +412,88 @@ export function useRecorder({
         PCM_QUEUE.length = 0;
         sendChunk(new Blob([flat], { type: "application/octet-stream" }));
       }
-      const stopPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, {
+      feedbackPromise = fetch(`/api/realtime/stop/${sessionIdRef.current}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ client_timeline: timelineRef.current }),
       }).then(async (r) => {
         const j = await r.json();
         if (!r.ok) throw new Error(j.detail);
+        console.log("STOP json_ready");
         return j as FeedbackData;
       });
       sessionIdRef.current = null;
-      setTimeout(async () => {
-        setStatus("Feedback afspelen");
-        await new Promise((res) => {
-          const a = new Audio("/api/audio/" + FILLER_AUDIO);
-          a.onended = res;
-          a.play();
-        });
-        if (sentenceAudio)
-          await new Promise((res) => {
-            const a = new Audio("/api/audio/" + sentenceAudio);
-            a.onended = res;
-            a.play();
-          });
-        let data: FeedbackData;
-        try {
-          data = await stopPromise;
-        } catch (err) {
-          setStatus("Fout: " + (err as Error).message);
-          return;
-        }
-        const total = recordedChunksRef.current.reduce(
-          (n, c) => n + c.length,
-          0,
-        );
-        const flat = new Int16Array(total);
-        let pos = 0;
-        for (const c of recordedChunksRef.current) {
-          flat.set(c, pos);
-          pos += c.length;
-        }
-        const wav = encodeWav(flat, sampleRate);
-        console.log("final wav blob", wav.size, "bytes");
-        const url = URL.createObjectURL(wav);
-        setPlaybackUrl(url);
-        const fb = new Audio("/api/audio/" + data.feedback_audio);
-        onFeedback(data);
-        fb.onended = () => setStatus("");
-        fb.play();
-      }, delayRef.current * 1000);
-      recStateRef.current = "idle";
-      return;
+    } else {
+      const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
+      const flat = new Int16Array(total);
+      let pos = 0;
+      for (const c of recordedChunksRef.current) {
+        flat.set(c, pos);
+        pos += c.length;
+      }
+      const wav = encodeWav(flat, sampleRate);
+      console.log("final wav blob", wav.size, "bytes");
+      const url = URL.createObjectURL(wav);
+      setPlaybackUrl(url);
+      const fd = new FormData();
+      fd.append("file", wav, "audio.wav");
+      fd.append("sentence", sentence);
+      fd.append("teacher_id", String(teacherId));
+      fd.append("student_id", studentId);
+      feedbackPromise = fetch("/api/process", { method: "POST", body: fd }).then(
+        async (r) => {
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.detail);
+          console.log("STOP json_ready");
+          return j as FeedbackData & { delay_seconds: number };
+        },
+      );
     }
 
-    // Offline mode: process the full recording in one request
-    const total = recordedChunksRef.current.reduce((n, c) => n + c.length, 0);
-    const flat = new Int16Array(total);
-    let pos = 0;
-    for (const c of recordedChunksRef.current) {
-      flat.set(c, pos);
-      pos += c.length;
-    }
-    const wav = encodeWav(flat, sampleRate);
-    const fd = new FormData();
-    fd.append("file", wav, "audio.wav");
-    fd.append("sentence", sentence);
-    fd.append("teacher_id", String(teacherId));
-    fd.append("student_id", studentId);
-    let data: FeedbackData & { delay_seconds: number };
-    try {
-      const r = await fetch("/api/process", { method: "POST", body: fd });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.detail);
-      data = j;
-    } catch (err) {
-      setStatus("Fout: " + (err as Error).message);
-      return;
-    }
-    const url = URL.createObjectURL(wav);
-    setPlaybackUrl(url);
-    setTimeout(
-        async () => {
-          setStatus("Feedback afspelen");
-          await new Promise((res) => {
-            const a = new Audio("/api/audio/" + FILLER_AUDIO);
-            a.onended = res;
-            a.play();
-          });
-          if (sentenceAudio)
-            await new Promise((res) => {
-              const a = new Audio("/api/audio/" + sentenceAudio);
-              a.onended = res;
-              a.play();
-            });
-          const fb = new Audio("/api/audio/" + data.feedback_audio);
-          onFeedback(data);
-          fb.onended = () => setStatus("");
-          fb.play();
-        },
-      (data.delay_seconds ?? 0) * 1000,
-    );
+    startPreRoll();
+
+    feedbackPromise
+      .then((data) => {
+        if (realtimeRef.current) {
+          const total = recordedChunksRef.current.reduce(
+            (n, c) => n + c.length,
+            0,
+          );
+          const flat = new Int16Array(total);
+          let pos = 0;
+          for (const c of recordedChunksRef.current) {
+            flat.set(c, pos);
+            pos += c.length;
+          }
+          const wav = encodeWav(flat, sampleRate);
+          console.log("final wav blob", wav.size, "bytes");
+          const url = URL.createObjectURL(wav);
+          setPlaybackUrl(url);
+        }
+        onFeedback(data);
+        const fb = getAudioEl(data.feedback_audio);
+        fb.onended = () => {
+          activeAudiosRef.current.delete(fb);
+          setStatus("");
+        };
+        const playFb = () => {
+          console.log("FEEDBACK play_start");
+          fb.currentTime = 0;
+          activeAudiosRef.current.add(fb);
+          fb.play().catch(() => {});
+        };
+        if (preRollPlayingRef.current) pendingFeedbackRef.current = playFb;
+        else playFb();
+      })
+      .catch((err) => {
+        const showErr = () =>
+          setStatus(
+            "Fout: " + (err instanceof Error ? err.message : String(err)),
+          );
+        if (preRollPlayingRef.current) pendingFeedbackRef.current = showErr;
+        else showErr();
+      });
+
     recStateRef.current = "idle";
   }
 
