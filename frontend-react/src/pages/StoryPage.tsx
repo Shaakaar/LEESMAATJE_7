@@ -32,7 +32,8 @@ export default function StoryPage() {
     currentItem && currentItem.type === 'sentence' ? currentItem.audio : undefined;
   const {
     recording,
-    status,
+    phase,
+    statusLabel,
     playbackUrl,
     startRecording: recorderStart,
     stopRecording: recorderStop,
@@ -142,7 +143,8 @@ export default function StoryPage() {
             recording={recording}
             playbackUrl={playbackUrl}
             onPlayback={playRecorded}
-            status={status}
+            statusLabel={statusLabel}
+            phase={phase}
             canvasRef={canvasRef}
           />
         )}
@@ -156,7 +158,11 @@ export default function StoryPage() {
           </button>
           <button
             onClick={next}
-            disabled={index === storyData.length - 1 || currentItem?.type === 'direction'}
+            disabled={
+              index === storyData.length - 1 ||
+              currentItem?.type === 'direction' ||
+              ['recording', 'playing-filler', 'building-feedback', 'playing-feedback'].includes(phase)
+            }
             className="flex items-center gap-1 px-4 py-2 rounded-full bg-primary text-white font-semibold disabled:opacity-50"
           >
             Volgende <i className="lucide lucide-chevrons-right" />

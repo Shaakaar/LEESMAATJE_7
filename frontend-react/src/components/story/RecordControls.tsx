@@ -1,10 +1,14 @@
+import { TutorPhase } from '@/hooks/useRecorder';
+import { ShimmerText } from '../ShimmerText';
+
 interface RecordControlsProps {
   onRecord: () => void;
   onStop: () => void;
   recording: boolean;
   playbackUrl: string | null;
   onPlayback: () => void;
-  status: string;
+  statusLabel: string;
+  phase: TutorPhase;
   canvasRef: React.RefObject<HTMLCanvasElement>;
 }
 
@@ -14,7 +18,8 @@ export function RecordControls({
   recording,
   playbackUrl,
   onPlayback,
-  status,
+  statusLabel,
+  phase,
   canvasRef,
 }: RecordControlsProps) {
   return (
@@ -45,7 +50,9 @@ export function RecordControls({
           <span className="font-semibold">Afspelen</span>
         </button>
       )}
-      <div className="mt-2 font-semibold h-5">{status}</div>
+      <div className="mt-2 font-semibold h-5">
+        <ShimmerText text={statusLabel} active={phase !== 'idle' && phase !== 'error'} />
+      </div>
     </div>
   );
 }
