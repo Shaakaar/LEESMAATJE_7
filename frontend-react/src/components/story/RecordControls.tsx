@@ -1,4 +1,4 @@
-import { TutorPhase } from '@/hooks/useRecorder';
+import type { TutorPhase } from '@/hooks/useRecorder';
 import { ShimmerText } from '../ShimmerText';
 
 interface RecordControlsProps {
