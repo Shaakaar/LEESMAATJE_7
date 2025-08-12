@@ -22,26 +22,28 @@
     @apply bg-red-200 px-1 rounded;
   }
   @keyframes shimmer-ltr-stable {
-    0%   { background-position: -100% 0; }
-    100% { background-position:  100% 0; }
+    0%   { background-position: -60% 0; }
+    100% { background-position: 160% 0; }
   }
 
   .animate-shimmer {
     --shimmer-speed: 2200ms; /* adjust 2000–2600ms if needed */
+    display: inline-block;
+    will-change: background-position;
     color: inherit;
 
     background-image: linear-gradient(
       90deg,
       currentColor 0%,
-      rgba(255,255,255,.35) 18%,
+      rgba(255,255,255,0.35) 18%,
       currentColor 36%
     );
-    background-size: 300% 100%;      /* wider so gradient never fully leaves */
+    background-size: 260% 100%;         /* wide so it never fully leaves */
     background-repeat: no-repeat;
 
     -webkit-background-clip: text;
     background-clip: text;
-    -webkit-text-fill-color: transparent;
+    -webkit-text-fill-color: transparent; /* only on overlay, not base text */
 
     animation: shimmer-ltr-stable var(--shimmer-speed) linear infinite;
   }
