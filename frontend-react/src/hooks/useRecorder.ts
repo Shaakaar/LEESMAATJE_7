@@ -9,6 +9,7 @@ const PREBUFFER_MAX_MS = 10000; // safety cap, 10s
 type RecState = "idle" | "starting" | "streaming" | "stopping";
 
 const FILLER_AUDIO = "de_zin_was.wav";
+const PREROLL_DELAY_MS = 400; // delay before playing filler audio
 
 export interface FeedbackData {
   feedback_text: string;
@@ -45,7 +46,6 @@ export function useRecorder({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sessionIdRef = useRef<string | null>(null);
-  const delayRef = useRef<number>(0);
   const recordedChunksRef = useRef<Int16Array[]>([]);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -56,6 +56,7 @@ export function useRecorder({
   const tRecordClickRef = useRef(0);
   const startPromiseRef = useRef<Promise<string> | null>(null);
   const pendingStopRef = useRef(false);
+  const preRollRef = useRef<{ cancel: () => void } | null>(null);
 
   function ensureRing(sampleRate: number) {
     const cap = Math.max(
@@ -77,6 +78,15 @@ export function useRecorder({
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    return () => cancelPreRoll();
+  }, []);
+
+  function cancelPreRoll() {
+    preRollRef.current?.cancel();
+    preRollRef.current = null;
+  }
 
   function sendChunk(blob: Blob) {
     if (!realtimeRef.current || !sessionIdRef.current) return;
@@ -122,9 +132,53 @@ export function useRecorder({
     rafRef.current = requestAnimationFrame(visualize);
   }
 
+  function schedulePreRoll(
+    stopPromise: Promise<FeedbackData>,
+    after: (
+      data: FeedbackData,
+      state: { cancelled: boolean; audios: HTMLAudioElement[] },
+    ) => Promise<void>,
+  ) {
+    cancelPreRoll();
+    const state = { cancelled: false, audios: [] as HTMLAudioElement[] };
+    preRollRef.current = {
+      cancel: () => {
+        state.cancelled = true;
+        for (const a of state.audios) a.pause();
+      },
+    };
+    setTimeout(async () => {
+      if (state.cancelled) return;
+      setStatus("Feedback afspelen");
+      const play = async (src: string) => {
+        if (state.cancelled) return;
+        await new Promise<void>((res) => {
+          const a = new Audio(src);
+          state.audios.push(a);
+          a.onended = res;
+          a.onerror = res;
+          a.play();
+        });
+      };
+      await play(`/api/audio/${FILLER_AUDIO}`);
+      if (sentenceAudio) await play(`/api/audio/${sentenceAudio}`);
+      if (state.cancelled) return;
+      let data: FeedbackData;
+      try {
+        data = await stopPromise;
+      } catch (err) {
+        setStatus("Fout: " + (err as Error).message);
+        return;
+      }
+      if (state.cancelled) return;
+      await after(data, state);
+    }, PREROLL_DELAY_MS);
+  }
+
   async function startRecording() {
     console.log("startRecording");
     if (!sentence) return;
+    cancelPreRoll();
     timelineRef.current = {};
     timelineRef.current.ui_click = performance.now();
     recStateRef.current = "starting";
@@ -153,7 +207,6 @@ export function useRecorder({
           const j = await r.json();
           if (!r.ok) throw new Error(j.detail);
           sessionIdRef.current = j.session_id;
-          delayRef.current = j.delay_seconds;
           timelineRef.current.start_resp_ok = performance.now();
           const sr = sampleRateRef.current ?? audioCtx.sampleRate;
           const ring = ensureRing(sr);
@@ -194,7 +247,6 @@ export function useRecorder({
       })();
     } else {
       sessionIdRef.current = null;
-      delayRef.current = 0;
       recStateRef.current = "streaming";
     }
 
@@ -318,26 +370,7 @@ export function useRecorder({
         return j as FeedbackData;
       });
       sessionIdRef.current = null;
-      setTimeout(async () => {
-        setStatus("Feedback afspelen");
-        await new Promise((res) => {
-          const a = new Audio("/api/audio/" + FILLER_AUDIO);
-          a.onended = res;
-          a.play();
-        });
-        if (sentenceAudio)
-          await new Promise((res) => {
-            const a = new Audio("/api/audio/" + sentenceAudio);
-            a.onended = res;
-            a.play();
-          });
-        let data: FeedbackData;
-        try {
-          data = await stopPromise;
-        } catch (err) {
-          setStatus("Fout: " + (err as Error).message);
-          return;
-        }
+      schedulePreRoll(stopPromise, async (data, state) => {
         const total = recordedChunksRef.current.reduce(
           (n, c) => n + c.length,
           0,
@@ -351,12 +384,14 @@ export function useRecorder({
         const wav = encodeWav(flat, sampleRate);
         console.log("final wav blob", wav.size, "bytes");
         const url = URL.createObjectURL(wav);
+        if (state.cancelled) return;
         setPlaybackUrl(url);
         const fb = new Audio("/api/audio/" + data.feedback_audio);
+        state.audios.push(fb);
         onFeedback(data);
         fb.onended = () => setStatus("");
         fb.play();
-      }, delayRef.current * 1000);
+      });
       recStateRef.current = "idle";
       return;
     }
@@ -375,39 +410,22 @@ export function useRecorder({
     fd.append("sentence", sentence);
     fd.append("teacher_id", String(teacherId));
     fd.append("student_id", studentId);
-    let data: FeedbackData & { delay_seconds: number };
-    try {
-      const r = await fetch("/api/process", { method: "POST", body: fd });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.detail);
-      data = j;
-    } catch (err) {
-      setStatus("Fout: " + (err as Error).message);
-      return;
-    }
+    const stopPromise = fetch("/api/process", { method: "POST", body: fd }).then(
+      async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail);
+        return j as FeedbackData;
+      },
+    );
     const url = URL.createObjectURL(wav);
     setPlaybackUrl(url);
-    setTimeout(
-        async () => {
-          setStatus("Feedback afspelen");
-          await new Promise((res) => {
-            const a = new Audio("/api/audio/" + FILLER_AUDIO);
-            a.onended = res;
-            a.play();
-          });
-          if (sentenceAudio)
-            await new Promise((res) => {
-              const a = new Audio("/api/audio/" + sentenceAudio);
-              a.onended = res;
-              a.play();
-            });
-          const fb = new Audio("/api/audio/" + data.feedback_audio);
-          onFeedback(data);
-          fb.onended = () => setStatus("");
-          fb.play();
-        },
-      (data.delay_seconds ?? 0) * 1000,
-    );
+    schedulePreRoll(stopPromise, async (data, state) => {
+      const fb = new Audio("/api/audio/" + data.feedback_audio);
+      state.audios.push(fb);
+      onFeedback(data);
+      fb.onended = () => setStatus("");
+      fb.play();
+    });
     recStateRef.current = "idle";
   }
 
