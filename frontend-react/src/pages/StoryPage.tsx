@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { useAuthStore } from '@/lib/useAuthStore';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useRecorder, preloadAudios } from '@/hooks/useRecorder';
+import { useRecorder } from '@/hooks/useRecorder';
 import type { FeedbackData } from '@/hooks/useRecorder';
 import { SentenceDisplay } from '@/components/story/SentenceDisplay';
 import type { StoryItem } from '@/components/story/SentenceDisplay';
@@ -55,11 +55,7 @@ export default function StoryPage() {
       return;
     }
     try {
-      const parsed: StoryItem[] = JSON.parse(data);
-      setStoryData(parsed);
-      preloadAudios(
-        parsed.filter((i) => i.type === 'sentence').map((i) => i.audio),
-      );
+      setStoryData(JSON.parse(data));
       const idx = Number(localStorage.getItem('story_index'));
       if (!Number.isNaN(idx)) {
         setIndex(idx);
