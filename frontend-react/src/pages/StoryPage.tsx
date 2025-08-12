@@ -4,6 +4,7 @@ import { useAuthStore } from '@/lib/useAuthStore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useRecorder } from '@/hooks/useRecorder';
 import type { FeedbackData } from '@/hooks/useRecorder';
+import { getAudioEl } from '@/utils/audioCache';
 import { SentenceDisplay } from '@/components/story/SentenceDisplay';
 import type { StoryItem } from '@/components/story/SentenceDisplay';
 import { FeedbackBox } from '@/components/story/FeedbackBox';
@@ -27,6 +28,8 @@ export default function StoryPage() {
 
   const sentenceText =
     currentItem && currentItem.type === 'sentence' ? currentItem.text : '';
+  const sentenceAudio =
+    currentItem && currentItem.type === 'sentence' ? currentItem.audio : undefined;
   const {
     recording,
     status,
@@ -35,8 +38,7 @@ export default function StoryPage() {
     stopRecording: recorderStop,
   } = useRecorder({
     sentence: sentenceText,
-    sentenceAudio:
-      currentItem && currentItem.type === 'sentence' ? currentItem.audio : undefined,
+    sentenceAudio,
     teacherId: Number(teacherId) || 0,
     studentId: studentId ?? '',
     onFeedback: (d) => {
@@ -47,6 +49,10 @@ export default function StoryPage() {
     },
     canvas: canvasRef.current,
   });
+
+  useEffect(() => {
+    if (sentenceAudio) getAudioEl(sentenceAudio).load();
+  }, [sentenceAudio]);
 
   useEffect(() => {
     const data = localStorage.getItem('story_data');

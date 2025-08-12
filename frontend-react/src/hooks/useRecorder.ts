@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RingBuffer } from "../utils/ringBuffer";
+import { getAudioEl, type AudioHandle } from "../utils/audioCache";
 
 const SEND_INTERVAL_MS = 100; // how often to upload audio (in ms)
 const DEBUG = false; // set true to enable chunk logs
@@ -9,19 +10,6 @@ const PREBUFFER_MAX_MS = 10000; // safety cap, 10s
 type RecState = "idle" | "starting" | "streaming" | "stopping";
 
 const FILLER_AUDIO = "de_zin_was.wav";
-
-type AudioHandle = HTMLAudioElement;
-const audioCache = new Map<string, AudioHandle>();
-
-function getAudioEl(name: string): AudioHandle {
-  let h = audioCache.get(name);
-  if (!h) {
-    h = new Audio(`/api/audio/${name}`);
-    h.preload = "auto";
-    audioCache.set(name, h);
-  }
-  return h;
-}
 
 async function playSequentially(
   items: { handle: AudioHandle; log: string }[],
