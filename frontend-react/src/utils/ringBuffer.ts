@@ -31,6 +31,15 @@ export class RingBuffer {
     return out;
   }
 
+  readLast(nSamples: number): Int16Array {
+    const len = Math.min(nSamples, this.size);
+    const out = new Int16Array(len);
+    const start = (this.writePos - len + this.buf.length) % this.buf.length;
+    for (let i = 0; i < len; i++)
+      out[i] = this.buf[(start + i) % this.buf.length];
+    return out;
+  }
+
   get lengthSamples() {
     return this.size;
   }

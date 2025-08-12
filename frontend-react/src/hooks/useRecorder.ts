@@ -5,7 +5,8 @@ const SEND_INTERVAL_MS = 100; // how often to upload audio (in ms)
 const DEBUG = false; // set true to enable chunk logs
 const PCM_QUEUE: Int16Array[] = [];
 let lastSend = 0;
-const PRE_ROLL_SEC = 1.5;
+const PREBUFFER_MAX_MS = 10000; // safety cap, 10s
+type RecState = "idle" | "starting" | "streaming" | "stopping";
 
 const FILLER_AUDIO = "de_zin_was.wav";
 
@@ -51,10 +52,16 @@ export function useRecorder({
   const realtimeRef = useRef(true);
   const timelineRef = useRef<Record<string, number>>({});
   const ringRef = useRef<RingBuffer | null>(null);
-  const backendReadyRef = useRef(false);
+  const recStateRef = useRef<RecState>("idle");
+  const tRecordClickRef = useRef(0);
+  const startPromiseRef = useRef<Promise<string> | null>(null);
+  const pendingStopRef = useRef(false);
 
   function ensureRing(sampleRate: number) {
-    const cap = Math.max(1, Math.round(sampleRate * PRE_ROLL_SEC));
+    const cap = Math.max(
+      1,
+      Math.round((sampleRate * PREBUFFER_MAX_MS) / 1000),
+    );
     if (!ringRef.current || ringRef.current.capacity !== cap) {
       ringRef.current = new RingBuffer(cap);
     }
@@ -120,6 +127,9 @@ export function useRecorder({
     if (!sentence) return;
     timelineRef.current = {};
     timelineRef.current.ui_click = performance.now();
+    recStateRef.current = "starting";
+    pendingStopRef.current = false;
+    tRecordClickRef.current = performance.now();
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
     sampleRateRef.current = audioCtx.sampleRate;
@@ -128,13 +138,12 @@ export function useRecorder({
     lastSend = 0;
 
     if (realtimeRef.current) {
-      backendReadyRef.current = false;
       const fd = new FormData();
       fd.append("sentence", sentence);
       fd.append("sample_rate", String(audioCtx.sampleRate));
       fd.append("teacher_id", String(teacherId));
       fd.append("student_id", studentId);
-      (async () => {
+      startPromiseRef.current = (async () => {
         try {
           timelineRef.current.start_req_sent = performance.now();
           const r = await fetch("/api/realtime/start", {
@@ -146,20 +155,27 @@ export function useRecorder({
           sessionIdRef.current = j.session_id;
           delayRef.current = j.delay_seconds;
           timelineRef.current.start_resp_ok = performance.now();
-          backendReadyRef.current = true;
-          const ring = ensureRing(sampleRateRef.current ?? audioCtx.sampleRate);
-          const preload = ring.drainAll();
-          const ms =
-            (preload.length / (sampleRateRef.current ?? audioCtx.sampleRate)) *
-            1000;
-          timelineRef.current.ring_capacity_samples = ring.capacity;
-          timelineRef.current.ring_preload_samples_sent = preload.length;
-          timelineRef.current.ring_preload_ms = ms;
+          const sr = sampleRateRef.current ?? audioCtx.sampleRate;
+          const ring = ensureRing(sr);
+          const prebufferMs = Math.min(
+            performance.now() - tRecordClickRef.current,
+            PREBUFFER_MAX_MS,
+          );
+          const prebufferSamples = Math.floor((prebufferMs * sr) / 1000);
+          const preload = ring.readLast(prebufferSamples);
+          ring.clear();
+          timelineRef.current.prebuffer_samples_sent = preload.length;
+          timelineRef.current.prebuffer_ms = prebufferMs;
           if (preload.length)
             sendChunk(new Blob([preload], { type: "application/octet-stream" }));
           console.log(
-            `Frontend: preload_sent_ms=${ms.toFixed(1)}, samples=${preload.length}`,
+            `Frontend: preload_sent_ms=${prebufferMs.toFixed(1)}, samples=${preload.length}`,
           );
+          recStateRef.current = "streaming";
+          if (pendingStopRef.current) {
+            pendingStopRef.current = false;
+            stopRecording();
+          }
         } catch (err) {
           console.error("start failed", err);
           setStatus(
@@ -172,12 +188,14 @@ export function useRecorder({
           await audioCtxRef.current?.close();
           audioCtxRef.current = null;
           ringRef.current?.clear();
+          recStateRef.current = "idle";
         }
+        return sessionIdRef.current ?? "";
       })();
     } else {
       sessionIdRef.current = null;
       delayRef.current = 0;
-      backendReadyRef.current = true;
+      recStateRef.current = "streaming";
     }
 
     let stream: MediaStream;
@@ -223,12 +241,13 @@ export function useRecorder({
         timelineRef.current.first_chunk_captured = performance.now();
       recordedChunksRef.current.push(pcm);
       if (!realtimeRef.current) return;
-      if (!backendReadyRef.current) {
+      if (recStateRef.current === "starting") {
         const sr = sampleRateRef.current ?? 16000;
         const ring = ensureRing(sr);
         ring.write(pcm);
         return;
       }
+      if (recStateRef.current !== "streaming") return;
       PCM_QUEUE.push(pcm);
       const now = performance.now();
       if (now - lastSend < SEND_INTERVAL_MS) return;
@@ -260,9 +279,13 @@ export function useRecorder({
 
   async function stopRecording() {
     console.log("stopRecording");
+    if (recStateRef.current === "starting") {
+      pendingStopRef.current = true;
+      return;
+    }
+    recStateRef.current = "stopping";
     recordingRef.current = false;
     setRecording(false);
-    backendReadyRef.current = false;
     ringRef.current?.clear();
     ringRef.current = null;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -334,6 +357,7 @@ export function useRecorder({
         fb.onended = () => setStatus("");
         fb.play();
       }, delayRef.current * 1000);
+      recStateRef.current = "idle";
       return;
     }
 
@@ -384,6 +408,7 @@ export function useRecorder({
         },
       (data.delay_seconds ?? 0) * 1000,
     );
+    recStateRef.current = "idle";
   }
 
   return {
