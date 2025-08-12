@@ -38,12 +38,15 @@
     background-repeat: no-repeat;
     -webkit-background-clip: text;
     background-clip: text;
-    color: transparent;
+    -webkit-text-fill-color: transparent;
     animation: shimmer-ltr var(--shimmer-speed) linear infinite;
   }
 }
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .animate-shimmer { animation: none; color: inherit; }
+  .animate-shimmer {
+    animation: none;
+    -webkit-text-fill-color: inherit;
+  }
 }
