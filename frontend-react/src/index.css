@@ -22,8 +22,8 @@
     @apply bg-red-200 px-1 rounded;
   }
   @keyframes shimmer-ltr-contrast {
-    0%   { background-position: -50% 0; }
-    100% { background-position: 150% 0; }
+    0%   { background-position: 150% 0; }
+    100% { background-position: -50% 0; }
   }
 
   .animate-shimmer {
