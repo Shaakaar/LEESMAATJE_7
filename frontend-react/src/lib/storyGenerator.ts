@@ -55,6 +55,9 @@ export interface GenerateOptions {
   chosenDirection?: string;
   storySoFar?: string;
   temperature?: number;
+  allowedGraphemes?: string[];
+  allowedPatterns?: string[];
+  maxWords?: number;
 }
 
 export async function generateTurn({
@@ -64,6 +67,9 @@ export async function generateTurn({
   chosenDirection,
   storySoFar,
   temperature = 0.4,
+  allowedGraphemes,
+  allowedPatterns,
+  maxWords,
 }: GenerateOptions) {
   const userPrompt = buildUserPrompt({
     theme,
@@ -71,6 +77,9 @@ export async function generateTurn({
     unitLabel: unit.label,
     chosenDirection,
     storySoFar,
+    allowedGraphemes,
+    allowedPatterns,
+    maxWords,
   });
 
   const client = new OpenAI({
@@ -103,8 +112,20 @@ function buildUserPrompt(opts: {
   unitLabel: string;
   chosenDirection?: string;
   storySoFar?: string;
+  allowedGraphemes?: string[];
+  allowedPatterns?: string[];
+  maxWords?: number;
 }): string {
-  const { theme, levelLabel, unitLabel, chosenDirection, storySoFar } = opts;
+  const {
+    theme,
+    levelLabel,
+    unitLabel,
+    chosenDirection,
+    storySoFar,
+    allowedGraphemes,
+    allowedPatterns,
+    maxWords,
+  } = opts;
   const parts = [
     `Thema: ${theme}`,
     `Niveau/Unit (optioneel): ${levelLabel} ${unitLabel}`,
@@ -114,8 +135,12 @@ function buildUserPrompt(opts: {
     parts.push(`Verhaal tot nu toe (optioneel): "${storySoFar}"`);
   parts.push(
     '',
-    'Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan op dit verhaal en thema.',
-    'Hou het simpel en prettig om voor te lezen.',
+    'Beperkingen voor deze stap:',
+    `• Toegestane letters/klanken: ${(allowedGraphemes ?? []).join(', ')}.`,
+    `• Toegestane woordpatronen: ${(allowedPatterns ?? []).join(', ')}.`,
+    `• Maximaal ${maxWords ?? 8} woorden per zin.`,
+    '',
+    'Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan en binnen deze grenzen blijven.',
     'Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden).',
   );
   return parts.join('\n');
