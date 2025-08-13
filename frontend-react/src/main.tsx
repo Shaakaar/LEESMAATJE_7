@@ -11,6 +11,10 @@ import ProgressPage from './pages/ProgressPage';
 import RequireAuth from './components/RequireAuth';
 import StoryPage from './pages/StoryPage';
 import ContinuePage from './pages/ContinuePage';
+import SelectLevelPage from './pages/SelectLevelPage';
+import SelectUnitPage from './pages/SelectUnitPage';
+import SessionPage from './pages/SessionPage';
+import ResultsPage from './pages/ResultsPage';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -25,6 +29,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="/story" element={<StoryPage />} />
             <Route path="/continue" element={<ContinuePage />} />
             <Route path="/progress" element={<ProgressPage />} />
+            <Route path="/levels" element={<SelectLevelPage />} />
+            <Route path="/units/:levelId" element={<SelectUnitPage />} />
+            <Route path="/session/:levelId/:unitId" element={<SessionPage />} />
+            <Route path="/results" element={<ResultsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
