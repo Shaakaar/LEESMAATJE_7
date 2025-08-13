@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import AppShell from '@/components/layout/AppShell';
 import { loadContentConfig } from '@/lib/contentConfig';
 import { generateTurn } from '@/lib/storyGenerator';
+import { ShimmerText } from '@/components/ShimmerText';
 
 function allowedFor(levelId: string, unitId: string) {
   const cfg = loadContentConfig();
@@ -68,7 +69,9 @@ export default function SessionPage() {
   }, [levelId, unitId, navigate]);
   return (
     <AppShell>
-      <div className="max-w-md w-full text-center">Voorbereiden…</div>
+      <div className="max-w-md w-full text-center">
+        <ShimmerText text="Voorbereiden…" />
+      </div>
     </AppShell>
   );
 }

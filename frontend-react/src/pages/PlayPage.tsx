@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/lib/useAuthStore';
 import { motion } from 'framer-motion';
 import { BookOpen } from 'lucide-react';
+import { ShimmerText } from '@/components/ShimmerText';
 
 export default function PlayPage() {
   const { levelId, themeId } = useParams<{ levelId: string; themeId: string }>();
@@ -44,7 +45,9 @@ export default function PlayPage() {
   return (
     <AppShell>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 w-full max-w-md text-center">
-        <h2 className="font-title text-xl">Voorbereiden…</h2>
+        <h2 className="font-title text-xl">
+          <ShimmerText text="Voorbereiden…" />
+        </h2>
         <div className="flex justify-center">
           <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}>
             <BookOpen className="h-12 w-12 text-primary" />
