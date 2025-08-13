@@ -6,6 +6,8 @@ import { fileURLToPath, URL } from 'url';
 export default defineConfig({
   plugins: [react()],
   base: '/static/react/',
+  envDir: '..',
+  envPrefix: ['VITE_', 'OPENAI_'],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
