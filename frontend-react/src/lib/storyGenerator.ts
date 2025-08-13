@@ -90,7 +90,8 @@ export async function generateTurn({
       ],
       response_format: SCHEMA,
     });
-    return res.output[0]?.content[0]?.text;
+    type OutputItem = { content?: Array<{ text?: string }> };
+    return (res.output[0] as OutputItem)?.content?.[0]?.text;
   }
 
   for (let attempt = 0; attempt < 2; attempt++) {
