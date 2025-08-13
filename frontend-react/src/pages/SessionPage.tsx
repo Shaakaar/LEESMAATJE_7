@@ -27,11 +27,30 @@ export default function SessionPage() {
         unit,
         allowedGraphemes: allowed,
       });
-      localStorage.setItem('story_data', JSON.stringify([
-        ...data.sentences.map((s) => ({ type: 'sentence', text: s })),
-        { type: 'direction', text: data.directions[0] },
-        { type: 'direction', text: data.directions[1] },
-      ]));
+      async function tts(text: string) {
+        const res = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const j = (await res.json()) as { audio: string };
+        return j.audio;
+      }
+      const sentences = await Promise.all(
+        data.sentences.map(async (s) => ({
+          type: 'sentence' as const,
+          text: s,
+          audio: await tts(s),
+        })),
+      );
+      const directions = await Promise.all(
+        data.directions.map(async (d) => ({
+          type: 'direction' as const,
+          text: d,
+          audio: await tts(d),
+        })),
+      );
+      localStorage.setItem('story_data', JSON.stringify([...sentences, ...directions]));
       navigate('/story');
     }
     run();
