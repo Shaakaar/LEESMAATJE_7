@@ -23,27 +23,25 @@ Geen extra tekst, geen uitleg, geen markdown.`;
 
 const SCHEMA = {
   type: 'json_schema',
-  json_schema: {
-    name: 'ContinueStory',
-    schema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        sentences: {
-          type: 'array',
-          minItems: 5,
-          maxItems: 5,
-          items: { type: 'string', minLength: 3, maxLength: 120 },
-        },
-        directions: {
-          type: 'array',
-          minItems: 2,
-          maxItems: 2,
-          items: { type: 'string', minLength: 2, maxLength: 60 },
-        },
+  name: 'ContinueStory',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      sentences: {
+        type: 'array',
+        minItems: 5,
+        maxItems: 5,
+        items: { type: 'string', minLength: 3, maxLength: 120 },
       },
-      required: ['sentences', 'directions'],
+      directions: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 2,
+        items: { type: 'string', minLength: 2, maxLength: 60 },
+      },
     },
+    required: ['sentences', 'directions'],
   },
 } as const;
 
@@ -91,7 +89,7 @@ export async function generateTurn({
         { role: 'system', content: SYSTEM_MESSAGE },
         { role: 'user', content: userPrompt },
       ],
-      text: { response_format: SCHEMA },
+      text: { format: SCHEMA },
     });
     type OutputItem = { content?: Array<{ text?: string }> };
     return (res.output[0] as OutputItem)?.content?.[0]?.text;
