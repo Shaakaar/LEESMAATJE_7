@@ -52,8 +52,15 @@ export default function StoryPage() {
   });
 
   useEffect(() => {
-    if (sentenceAudio) getAudioEl(sentenceAudio).load();
-  }, [sentenceAudio]);
+    if (currentItem) {
+      getAudioEl(currentItem.audio).load();
+      currentItem.words?.forEach((w) => getAudioEl(w).load());
+    }
+    if (currentItem?.type === 'direction' && nextItem?.type === 'direction') {
+      getAudioEl(nextItem.audio).load();
+      nextItem.words?.forEach((w) => getAudioEl(w).load());
+    }
+  }, [currentItem, nextItem]);
 
   useEffect(() => {
     const data = localStorage.getItem('story_data');
