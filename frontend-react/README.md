@@ -21,6 +21,17 @@ Levels and themes are currently derived from
 these, update `src/lib/themeData.ts` to fetch them dynamically and adjust
 `LevelMap`/`LevelPage` accordingly.
 
+## Environment variables
+
+Add your OpenAI key to the repository's root `.env` file:
+
+```
+OPENAI_API_KEY=<your OpenAI API key>
+```
+
+Vite is configured to load this variable from the project root and expose it
+to the client.
+
 ### Scripts
 
 - `npm run dev` – development server

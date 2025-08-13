@@ -77,7 +77,10 @@ export async function generateTurn({
     focus,
   });
 
-  const client = new OpenAI();
+  const client = new OpenAI({
+    apiKey: import.meta.env.OPENAI_API_KEY,
+    dangerouslyAllowBrowser: true,
+  });
 
   async function callModel() {
     const res = await client.responses.parse({

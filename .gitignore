@@ -3,6 +3,9 @@ webapp/backend/storage/
 # React build artefacts
 frontend-react/dist
 
+# Local environment files
+.env
+
 # Ignore sample audio assets
 samples/
 *.wav
