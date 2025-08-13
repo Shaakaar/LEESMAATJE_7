@@ -1,25 +1,28 @@
-// Story generation service using OpenAI with strict schema and decodability guard
+// Simplified story generation service relying on model quality
 
 import OpenAI from 'openai';
 import type { UnitSpec, LevelSpec } from './contentConfig';
-import { isDecodable, buildFallback } from './decodability';
 
-const SYSTEM_MESSAGE = `Je bent een Nederlandse verhalenmaker voor beginnende lezers (4–8 jaar).
-Stijl en regels (STRIKT):
-• Toon: warm, veilig, eenvoudig. Tijd: tegenwoordige tijd.
-• Zinnen: kort en concreet, 4–9 woorden (later max 12).
+const SYSTEM_MESSAGE = `Je bent een Nederlandse verhalenmaker voor jonge kinderen (4–8 jaar).
+Doel en stijl (houd je hier aan):
+• Schrijf in eenvoudig, kindvriendelijk Nederlands.
+• Tegenwoordige tijd. Eén duidelijk idee per zin.
+• Zinnen zijn kort: 3–8 woorden.
 • Interpunctie: alleen een punt (.) aan het einde van elke zin.
-• Woorden: veelvoorkomende, decodabele woorden passend bij de opgegeven klanken/patronen.
-• Namen zijn toegestaan (eenvoudig), maar houd het perspectief binnen dit verhaal consistent.
-• Geen aanhalingstekens, geen cijfers, geen moeilijke vaktermen.
-• Mini-scène per beurt: (1) start, (2–3) kleine stappen, (4) gevolg, (5) zacht spanningspunt.
+• Namen zijn toegestaan; als je een naam gebruikt, houd die dan consequent in dit verhaal.
+• Elke beurt is een mini-scène:
+  (1) start/setting,
+  (2–3) kleine stappen,
+  (4) een zacht gevolg,
+  (5) een klein spanningsmoment dat naar een keuze leidt.
+• Geef daarna precies twee korte richtingzinnen (keuzes) in de gebiedende wijs, 2–4 woorden, parallel en betekenisvol.
 
-Uitvoer (STRIKT JSON):
+Uitvoer = ÉÉN JSON-object en verder niets:
 {
-  "sentences": [vijf zinnen],
-  "directions": [twee keuzes, gebiedende wijs, 2–4 woorden]
+  "sentences": [5 korte zinnen],
+  "directions": [2 korte keuzes]
 }
-Geen extra tekst, geen uitleg, geen markdown.`;
+Geen uitleg, geen extra tekst, geen markdown.`;
 
 const SCHEMA = {
   type: 'json_schema',
@@ -32,13 +35,13 @@ const SCHEMA = {
         type: 'array',
         minItems: 5,
         maxItems: 5,
-        items: { type: 'string', minLength: 3, maxLength: 120 },
+        items: { type: 'string' },
       },
       directions: {
         type: 'array',
         minItems: 2,
         maxItems: 2,
-        items: { type: 'string', minLength: 2, maxLength: 60 },
+        items: { type: 'string' },
       },
     },
     required: ['sentences', 'directions'],
@@ -49,9 +52,8 @@ export interface GenerateOptions {
   theme: string;
   level: LevelSpec;
   unit: UnitSpec;
-  allowedGraphemes: string[];
+  chosenDirection?: string;
   storySoFar?: string;
-  focus?: string[];
   temperature?: number;
 }
 
@@ -59,20 +61,16 @@ export async function generateTurn({
   theme,
   level,
   unit,
-  allowedGraphemes,
+  chosenDirection,
   storySoFar,
-  focus,
-  temperature = 0.2,
+  temperature = 0.4,
 }: GenerateOptions) {
   const userPrompt = buildUserPrompt({
     theme,
-    levelId: level.id,
-    unitId: unit.id,
-    allowedGraphemes,
-    allowedPatterns: unit.allowed_patterns,
-    maxWords: unit.sentence_rules.max_words,
+    levelLabel: level.label,
+    unitLabel: unit.label,
+    chosenDirection,
     storySoFar,
-    focus,
   });
 
   const client = new OpenAI({
@@ -80,75 +78,46 @@ export async function generateTurn({
     dangerouslyAllowBrowser: true,
   });
 
-  async function callModel() {
-    const res = await client.responses.parse({
-      model: 'gpt-4.1-mini',
-      temperature,
-      max_output_tokens: 300,
-      input: [
-        { role: 'system', content: SYSTEM_MESSAGE },
-        { role: 'user', content: userPrompt },
-      ],
-      text: { format: SCHEMA },
-    });
-    type OutputItem = { content?: Array<{ text?: string }> };
-    return (res.output[0] as OutputItem)?.content?.[0]?.text;
-  }
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const json = await callModel();
-      if (!json) throw new Error('empty response');
-      const data = JSON.parse(json) as {
-        sentences: string[];
-        directions: string[];
-      };
-      const ok = [...data.sentences, ...data.directions].every((s) =>
-        isDecodable(s, allowedGraphemes, unit.allowed_patterns, unit.sentence_rules.max_words),
-      );
-      if (ok) return data;
-    } catch {
-      /* ignore */
-    }
-  }
-  return buildFallback(unit, allowedGraphemes);
+  const res = await client.responses.parse({
+    model: 'gpt-4.1-mini',
+    temperature,
+    max_output_tokens: 300,
+    input: [
+      { role: 'system', content: SYSTEM_MESSAGE },
+      { role: 'user', content: userPrompt },
+    ],
+    text: { format: SCHEMA },
+  });
+  type OutputItem = { content?: Array<{ text?: string }> };
+  const json = (res.output[0] as OutputItem)?.content?.[0]?.text;
+  if (!json) throw new Error('empty response');
+  return JSON.parse(json) as {
+    sentences: string[];
+    directions: string[];
+  };
 }
 
 function buildUserPrompt(opts: {
   theme: string;
-  levelId: string;
-  unitId: string;
-  allowedGraphemes: string[];
-  allowedPatterns: string[];
-  maxWords: number;
+  levelLabel: string;
+  unitLabel: string;
+  chosenDirection?: string;
   storySoFar?: string;
-  focus?: string[];
 }): string {
-  const {
-    theme,
-    levelId,
-    unitId,
-    allowedGraphemes,
-    allowedPatterns,
-    maxWords,
-    storySoFar,
-    focus,
-  } = opts;
+  const { theme, levelLabel, unitLabel, chosenDirection, storySoFar } = opts;
   const parts = [
     `Thema: ${theme}`,
-    `Niveau: ${levelId}  Eenheid: ${unitId}`,
-    `Toegestane klanken/letters: ${allowedGraphemes.join(', ')}`,
-    `Toegestane patronen: ${allowedPatterns.join(', ')}`,
-    `Maximale woorden per zin: ${maxWords}`,
+    `Niveau/Unit (optioneel): ${levelLabel} ${unitLabel}`,
+    `Richting die is gekozen (vorige stap): ${chosenDirection ?? ''}`,
   ];
-  if (storySoFar) parts.push(`Verhaalsamenvatting tot nu toe: "${storySoFar}"`);
-  if (focus && focus.length)
-    parts.push(`Focus (optioneel): ${focus.join(', ')}`);
+  if (storySoFar)
+    parts.push(`Verhaal tot nu toe (optioneel): "${storySoFar}"`);
   parts.push(
-    'Schrijf vijf korte, decodabele zinnen die logisch doorgaan.',
+    '',
+    'Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan op dit verhaal en thema.',
+    'Hou het simpel en prettig om voor te lezen.',
+    'Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden).',
   );
-  parts.push('Gebruik alleen toegestane klanken/patronen; vermijd andere klanken.');
-  parts.push('Geef precies twee korte keuzes (gebiedende wijs, 2–4 woorden).');
   return parts.join('\n');
 }
 
