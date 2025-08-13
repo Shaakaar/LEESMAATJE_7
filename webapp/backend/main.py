@@ -550,7 +550,15 @@ async def start_story(theme: str, level: str):
 
 
 @app.get("/api/continue_story")
-async def continue_story(theme: str, level: str, direction: str, story: str | None = None):
+async def continue_story(
+    theme: str,
+    level: str,
+    direction: str,
+    story: str | None = None,
+    allowed: str | None = None,
+    patterns: str | None = None,
+    max_words: int | None = None,
+):
     """Generate the next story section based on the chosen direction."""
 
     import openai
@@ -584,8 +592,15 @@ async def continue_story(theme: str, level: str, direction: str, story: str | No
         f"Niveau/Unit (optioneel): {level}\n"
         f"Richting die is gekozen (vorige stap): {direction}\n"
         + (f"Verhaal tot nu toe (optioneel): \"{story}\"\n" if story else "")
-        + "\nSchrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan op dit verhaal en thema.\n"
-        + "Hou het simpel en prettig om voor te lezen.\n"
+        + "\nBeperkingen voor deze stap:\n"
+        + (
+            f"• Gebruik alleen woorden die decodabel zijn met deze letters/klanken: {allowed}. Vermijd andere klanken/spellingsclusters.\n"
+            if allowed
+            else ""
+        )
+        + (f"• Gebruik alleen deze woordpatronen: {patterns}.\n" if patterns else "")
+        + (f"• Maximaal {max_words} woorden per zin.\n" if max_words else "")
+        + "\nSchrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan en binnen deze grenzen blijven.\n"
         + "Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden)."
     )
 

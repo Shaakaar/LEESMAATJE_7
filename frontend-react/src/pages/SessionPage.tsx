@@ -23,10 +23,30 @@ export default function SessionPage() {
       const { level, unit } = findLevelUnit(levelId, unitId);
       if (!level || !unit) return;
       try {
+        const unitIdx = level.units.findIndex((u) => u.id === unit.id);
+        const allowedGraphemes = Array.from(
+          new Set(
+            level.units
+              .slice(0, unitIdx + 1)
+              .flatMap((u) => u.focus_phonemes),
+          ),
+        );
+        const allowedPatterns = unit.allowed_patterns;
+        const maxWords = unit.sentence_rules?.max_words ?? 8;
+
+        localStorage.setItem('level', level.id);
+        localStorage.setItem('unit', unit.id);
+        localStorage.setItem('allowed', allowedGraphemes.join(','));
+        localStorage.setItem('patterns', allowedPatterns.join(','));
+        localStorage.setItem('max_words', String(maxWords));
+
         const data = await generateTurn({
           theme: 'demo',
           level,
           unit,
+          allowedGraphemes,
+          allowedPatterns,
+          maxWords,
         });
         async function tts(text: string) {
           const res = await fetch('/api/tts', {
