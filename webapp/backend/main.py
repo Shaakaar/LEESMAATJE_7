@@ -365,6 +365,17 @@ async def generate_tts(payload: dict):
     return {"audio": os.path.basename(audio_path)}
 
 
+@app.post("/api/tts_word")
+async def generate_tts_word(payload: dict):
+    """Generate word-level TTS audio for the given text and return the filename."""
+    text = payload.get("text") if isinstance(payload, dict) else None
+    if not text:
+        raise HTTPException(status_code=400, detail="Missing text")
+    from .tts import word_tts_to_file
+    audio_path = await asyncio.to_thread(word_tts_to_file, text)
+    return {"audio": os.path.basename(audio_path)}
+
+
 @app.post("/api/realtime/start")
 async def realtime_start(
     sentence: str = Form(...),

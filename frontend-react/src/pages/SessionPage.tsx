@@ -36,11 +36,21 @@ export default function SessionPage() {
         const j = (await res.json()) as { audio: string };
         return j.audio;
       }
+      async function ttsWord(text: string) {
+        const res = await fetch('/api/tts_word', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const j = (await res.json()) as { audio: string };
+        return j.audio;
+      }
       const sentences = await Promise.all(
         data.sentences.map(async (s) => ({
           type: 'sentence' as const,
           text: s,
           audio: await tts(s),
+          words: await Promise.all(s.split(/\s+/).map((w) => ttsWord(w))),
         })),
       );
       const directions = await Promise.all(
@@ -48,6 +58,7 @@ export default function SessionPage() {
           type: 'direction' as const,
           text: d,
           audio: await tts(d),
+          words: await Promise.all(d.split(/\s+/).map((w) => ttsWord(w))),
         })),
       );
       localStorage.setItem('story_data', JSON.stringify([...sentences, ...directions]));
