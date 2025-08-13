@@ -17,13 +17,19 @@ export default function ContinuePage() {
     const level = localStorage.getItem('level');
     const direction = localStorage.getItem('direction_choice');
     const idx = Number(localStorage.getItem('direction_index'));
+    const storySoFar = JSON.parse(localStorage.getItem('story_data') ?? '[]')
+      .filter((i: StoryItem) => i.type === 'sentence')
+      .map((i: StoryItem) => i.text)
+      .join(' ');
 
     if (!theme || !level || !direction || Number.isNaN(idx)) {
       navigate('/');
       return;
     }
 
-    const ev = new EventSource(`/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(direction)}`);
+    const ev = new EventSource(
+      `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(direction)}&story=${encodeURIComponent(storySoFar)}`,
+    );
     const data: StoryItem[] = [];
 
     ev.addEventListener('progress', (e) => {

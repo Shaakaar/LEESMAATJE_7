@@ -550,31 +550,43 @@ async def start_story(theme: str, level: str):
 
 
 @app.get("/api/continue_story")
-async def continue_story(theme: str, level: str, direction: str, mistakes: str | None = None):
+async def continue_story(theme: str, level: str, direction: str, story: str | None = None):
     """Generate the next story section based on the chosen direction."""
-
-    letters = []
-    if mistakes:
-        try:
-            letters = json.loads(mistakes)
-        except Exception:
-            letters = []
 
     import openai
 
     client = openai.AsyncOpenAI()
 
     sys_prompt = (
-        "Je bent een verhalenverteller voor jonge kinderen. "
-        "Antwoord in JSON met de sleutels 'sentences' (lijst van zinnen) "
-        "en 'directions' (lijst van twee keuzes)."
+        "Je bent een Nederlandse verhalenmaker voor jonge kinderen (4–8 jaar).\n"
+        "Doel en stijl (houd je hier aan):\n"
+        "• Schrijf in eenvoudig, kindvriendelijk Nederlands.\n"
+        "• Tegenwoordige tijd. Eén duidelijk idee per zin.\n"
+        "• Zinnen zijn kort: 3–8 woorden.\n"
+        "• Interpunctie: alleen een punt (.) aan het einde van elke zin.\n"
+        "• Namen zijn toegestaan; als je een naam gebruikt, houd die dan consequent in dit verhaal.\n"
+        "• Elke beurt is een mini-scène:\n"
+        "  (1) start/setting,\n"
+        "  (2–3) kleine stappen,\n"
+        "  (4) een zacht gevolg,\n"
+        "  (5) een klein spanningsmoment dat naar een keuze leidt.\n"
+        "• Geef daarna precies twee korte richtingzinnen (keuzes) in de gebiedende wijs, 2–4 woorden, parallel en betekenisvol.\n"
+        "\n"
+        "Uitvoer = ÉÉN JSON-object en verder niets:\n"
+        "{\n"
+        "  \"sentences\": [5 korte zinnen],\n"
+        "  \"directions\": [2 korte keuzes]\n"
+        "}\n"
+        "Geen uitleg, geen extra tekst, geen markdown."
     )
     user_prompt = (
-        f"We zijn bezig met een verhaal in het thema {theme} op niveau {level}. "
-        f"Het verhaal gaat verder in de richting: {direction}. "
-        "Schrijf vijf korte zinnen voor het vervolg. "
-        + (f"Verwerk waar mogelijk deze letters of klanken: {', '.join(letters)}. " if letters else "")
-        + "Geef daarna twee nieuwe keuzes voor het vervolg."
+        f"Thema: {theme}\n"
+        f"Niveau/Unit (optioneel): {level}\n"
+        f"Richting die is gekozen (vorige stap): {direction}\n"
+        + (f"Verhaal tot nu toe (optioneel): \"{story}\"\n" if story else "")
+        + "\nSchrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan op dit verhaal en thema.\n"
+        + "Hou het simpel en prettig om voor te lezen.\n"
+        + "Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden)."
     )
 
     resp = await client.chat.completions.create(
