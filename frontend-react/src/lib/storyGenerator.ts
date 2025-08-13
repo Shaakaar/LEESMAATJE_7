@@ -91,7 +91,7 @@ export async function generateTurn({
         { role: 'system', content: SYSTEM_MESSAGE },
         { role: 'user', content: userPrompt },
       ],
-      response_format: SCHEMA,
+      text: { response_format: SCHEMA },
     });
     type OutputItem = { content?: Array<{ text?: string }> };
     return (res.output[0] as OutputItem)?.content?.[0]?.text;
