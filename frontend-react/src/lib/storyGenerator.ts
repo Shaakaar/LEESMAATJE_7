@@ -62,14 +62,14 @@ export async function generateTurn({
     temperature,
     top_p: 1.0,
     max_output_tokens: 300,
-    response_format: { type: 'json_object' },
     input: [
       { role: 'system', content: SYSTEM_MESSAGE },
       { role: 'user', content: userPrompt },
     ],
+    text: { format: { type: 'json_object' } },
   });
 
-  const json = res.output[0]?.content?.[0]?.text;
+  const json = res.output_text;
   if (!json) throw new Error('empty response');
   return JSON.parse(json) as {
     sentences: string[];
