@@ -82,10 +82,7 @@ export async function generateTurn({
     model: 'gpt-4o',
     temperature: 1.0,
     top_p: 1.0,
-    presence_penalty: 0,
-    frequency_penalty: 0,
     max_output_tokens: 300,
-    response_format: { type: 'json_object' },
     input: [
       { role: 'system', content: SYSTEM_MESSAGE },
       { role: 'user', content: userPrompt },
