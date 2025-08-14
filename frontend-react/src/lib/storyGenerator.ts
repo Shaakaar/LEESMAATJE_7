@@ -129,7 +129,7 @@ function buildFocusLines(focusList: string[]): string[] {
   if (n === 0) return [];
   if (n <= 2) {
     return [
-      `• Focusklanken (moeten voorkomen, elk ten minste één keer): [${uniq.join(', ')}]`,
+      `• Focusklanken (laat ze samen minstens drie keer terugkomen, elk ten minste één keer): [${uniq.join(', ')}]`,
       '  Voorbeeld: gebruik de lettergroep zichtbaar in een woord.',
     ];
   }

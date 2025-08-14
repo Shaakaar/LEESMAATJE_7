@@ -153,7 +153,7 @@ def _build_focus_lines(focus_list: list[str]) -> list[str]:
         return []
     if n <= 2:
         return [
-            f"• Focusklanken (moeten voorkomen, elk ten minste één keer): [{', '.join(uniq)}]",
+            f"• Focusklanken (laat ze samen minstens drie keer terugkomen, elk ten minste één keer): [{', '.join(uniq)}]",
             "  Voorbeeld: gebruik de lettergroep zichtbaar in een woord.",
         ]
     need = min(3, n)
