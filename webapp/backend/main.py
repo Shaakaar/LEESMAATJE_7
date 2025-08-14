@@ -79,6 +79,25 @@ app.mount(
 sent_index = 0
 models_ready = False
 
+SYSTEM_MESSAGE = (
+    "Je bent een Nederlandse verhalenmaker voor jonge kinderen (4–8 jaar).\n\n"
+    "Stijl (houd je hieraan):\n"
+    "• Eenvoudig, kindvriendelijk Nederlands in de tegenwoordige tijd.\n"
+    "• Korte zinnen: 3–8 woorden (of korter als nodig).\n"
+    "• Alleen een punt (.) aan het einde van elke zin.\n"
+    "• Namen zijn toegestaan; als je een naam gebruikt, houd die consequent.\n\n"
+    "Structuur per beurt:\n"
+    "• Vijf zinnen vormen samen één mini-scène.\n"
+    "• Zin 1–2 voeren de gekozen richting echt uit.\n"
+    "• Daarna geef je precies twee korte richtingzinnen (keuzes), gebiedende wijs, 2–4 woorden, parallel en betekenisvol.\n\n"
+    "Uitvoer = ÉÉN JSON-object en verder niets:\n"
+    "{\n"
+    "  \"sentences\": [5 korte zinnen],\n"
+    "  \"directions\": [2 korte keuzes]\n"
+    "}\n"
+    "Geen uitleg, geen extra tekst, geen markdown."
+)
+
 
 def _dump_prompt(prompt_text: str, json_text: str) -> None:
     try:
@@ -124,6 +143,51 @@ def _print_timeline(results: dict) -> None:
         d = _delta(tf, a, b)
         if d is not None:
             print(f"  {label}: {d:.1f} ms")
+
+
+def _build_focus_lines(focus_list: list[str]) -> list[str]:
+    focus_items = [x.strip() for x in focus_list if x.strip()]
+    uniq: list[str] = list(dict.fromkeys(focus_items))
+    n = len(uniq)
+    if n == 0:
+        return []
+    if n <= 2:
+        return [
+            f"• Focusklanken (moeten voorkomen, elk ten minste één keer): [{', '.join(uniq)}]",
+            "  Voorbeeld: gebruik de lettergroep zichtbaar in een woord.",
+        ]
+    need = min(3, n)
+    return [
+        f"• Focusklanken (laat minstens {need} verschillende items terugkomen): [{', '.join(uniq)}]",
+        "  Voorbeeld: 'maan' bevat [aa], 'bank' bevat [nk].",
+    ]
+
+
+def _build_user_prompt(
+    theme: str,
+    direction: str,
+    story: str | None,
+    focus: list[str],
+    allowed: list[str],
+    patterns: list[str],
+    max_words: int,
+) -> str:
+    lines = [
+        f"Thema (optioneel): {theme}",
+        f"Richting die is gekozen (vorige stap): {direction}",
+        f"Verhaal tot nu toe (optioneel): \"{story or ''}\"",
+        "",
+        "Beperkingen voor deze stap (houd het natuurlijk):",
+        *_build_focus_lines(focus),
+        f"• Je mag daarnaast ook andere letters/klanken gebruiken die al geleerd zijn: [{', '.join(allowed)}]",
+        f"• Woordpatronen (informatief): [{', '.join(patterns)}]",
+        f"• Maximaal {max_words} woorden per zin",
+        "",
+        "Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan.",
+        "Zin 1–2 voeren de gekozen richting echt uit.",
+        "Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden).",
+    ]
+    return "\n".join(lines)
 
 
 @app.post("/api/register")
@@ -566,37 +630,24 @@ async def continue_story(
 
     client = openai.AsyncOpenAI()
 
-    sys_prompt = (
-        "Je bent een Nederlandse verhalenmaker voor jonge kinderen (4–8 jaar).\n\n"
-        "Stijl (houd je hieraan):\n"
-        "• Eenvoudig, kindvriendelijk Nederlands in de tegenwoordige tijd.\n"
-        "• Korte zinnen: 3–8 woorden (of korter als nodig).\n"
-        "• Alleen een punt (.) aan het einde van elke zin.\n"
-        "• Namen zijn toegestaan; als je een naam gebruikt, houd die consequent.\n\n"
-        "Structuur per beurt:\n"
-        "• Vijf zinnen vormen samen één mini-scène.\n"
-        "• Zin 1–2 voeren de gekozen richting echt uit.\n"
-        "• Daarna geef je precies twee korte richtingzinnen (keuzes), gebiedende wijs, 2–4 woorden, parallel en betekenisvol.\n\n"
-        "Uitvoer = ÉÉN JSON-object en verder niets:\n"
-        "{\n"
-        "  \"sentences\": [5 korte zinnen],\n"
-        "  \"directions\": [2 korte keuzes]\n"
-        "}\n"
-        "Geen uitleg, geen extra tekst, geen markdown."
+    focus_list = focus.split(",") if focus else []
+    allowed_list = allowed.split(",") if allowed else []
+    patterns_list = patterns.split(",") if patterns else []
+    user_prompt = _build_user_prompt(
+        theme,
+        direction,
+        story,
+        focus_list,
+        allowed_list,
+        patterns_list,
+        max_words or 8,
     )
-    user_prompt = (
-        f"Thema (optioneel): {theme}\n"
-        f"Richting die is gekozen (vorige stap): {direction}\n"
-        + (f"Verhaal tot nu toe (optioneel): \"{story}\"\n" if story else "Verhaal tot nu toe (optioneel): \"\"\n")
-        + "\nBeperkingen voor deze stap (houd het natuurlijk):\n"
-        + f"• Focusklanken (deze wil ik sowieso terugzien): {focus or ''}\n"
-        + f"• Je mag daarnaast ook andere letters/klanken gebruiken die al geleerd zijn: {allowed or ''}\n"
-        + f"• Woordpatronen (informatief): {patterns or ''}\n"
-        + f"• Maximaal {max_words or 8} woorden per zin\n\n"
-        + "Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan en die\n"
-        + "minstens twee verschillende klanken uit de focuslijst bevatten.\n"
-        + "Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden)."
-    )
+    sys_prompt = SYSTEM_MESSAGE
+    if os.environ.get("DEBUG"):
+        console.rule("[bold blue]System[/bold blue]")
+        console.print(sys_prompt)
+        console.rule("[bold blue]User[/bold blue]")
+        console.print(user_prompt)
 
     resp = await client.chat.completions.create(
         model="gpt-4o",
@@ -609,11 +660,11 @@ async def continue_story(
 
     try:
         j = json.loads(resp.choices[0].message.content)
-        sentences = j.get("sentences", [])
-        directions = j.get("directions", [])
-    except Exception:
-        sentences = []
-        directions = []
+        sentences = j["sentences"]
+        directions = j["directions"]
+    except Exception as exc:
+        console.print(f"[red]Model output parsing failed: {exc}[/red]")
+        raise HTTPException(status_code=500, detail="Model gaf geen geldig JSON")
 
     from .tts import tts_to_file, word_tts_to_file
 

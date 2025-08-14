@@ -48,6 +48,8 @@ export default function SessionPage() {
           allowedGraphemes,
           allowedPatterns,
           maxWords,
+          chosenDirection: 'start',
+          storySoFar: '',
         });
         async function tts(text: string) {
           const res = await fetch('/api/tts', {
