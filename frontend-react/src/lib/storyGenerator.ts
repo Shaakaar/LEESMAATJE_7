@@ -2,13 +2,13 @@
 
 import OpenAI from 'openai';
 export interface GenerateOptions {
-  theme?: string;
   focusGraphemes: string[];
   allowedGraphemes: string[];
   allowedPatterns: string[];
   maxWords: number;
-  chosenDirection?: string;
+  chosenDirection: string;
   storySoFar?: string;
+  theme?: string;
   temperature?: number;
 }
 
@@ -33,24 +33,29 @@ Uitvoer = ÉÉN JSON-object en verder niets:
 Geen uitleg, geen extra tekst, geen markdown.`;
 
 export async function generateTurn({
-  theme,
   focusGraphemes,
   allowedGraphemes,
   allowedPatterns,
   maxWords,
   chosenDirection,
   storySoFar,
+  theme,
   temperature = 0.9,
 }: GenerateOptions) {
   const userPrompt = buildUserPrompt({
-    theme,
     chosenDirection,
     storySoFar,
+    theme,
     focusGraphemes,
     allowedGraphemes,
     allowedPatterns,
     maxWords,
   });
+
+  if (import.meta.env.DEV) {
+    console.log('System message:', SYSTEM_MESSAGE);
+    console.log('User message:', userPrompt);
+  }
 
   const client = new OpenAI({
     apiKey: import.meta.env.OPENAI_API_KEY,
@@ -79,7 +84,7 @@ export async function generateTurn({
 
 function buildUserPrompt(opts: {
   theme?: string;
-  chosenDirection?: string;
+  chosenDirection: string;
   storySoFar?: string;
   focusGraphemes: string[];
   allowedGraphemes: string[];
@@ -95,22 +100,44 @@ function buildUserPrompt(opts: {
     allowedPatterns,
     maxWords,
   } = opts;
+
+  const focusLines = buildFocusLines(focusGraphemes);
+
   const parts = [
     `Thema (optioneel): ${theme ?? ''}`,
-    `Richting die is gekozen (vorige stap): ${chosenDirection ?? ''}`,
+    `Richting die is gekozen (vorige stap): ${chosenDirection}`,
     `Verhaal tot nu toe (optioneel): "${storySoFar ?? ''}"`,
     '',
     'Beperkingen voor deze stap (houd het natuurlijk):',
-    `• Focusklanken (deze wil ik sowieso terugzien): ${focusGraphemes.join(', ')}`,
-    `• Je mag daarnaast ook andere letters/klanken gebruiken die al geleerd zijn: ${allowedGraphemes.join(', ')}`,
-    `• Woordpatronen (informatief): ${allowedPatterns.join(', ')}`,
+    ...focusLines,
+    `• Je mag daarnaast ook andere letters/klanken gebruiken die al geleerd zijn: [${allowedGraphemes.join(', ')}]`,
+    `• Woordpatronen (informatief): [${allowedPatterns.join(', ')}]`,
     `• Maximaal ${maxWords} woorden per zin`,
     '',
-    'Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan en die',
-    'minstens twee verschillende klanken uit de focuslijst bevatten.',
+    'Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan.',
+    'Zin 1–2 voeren de gekozen richting echt uit.',
     'Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden).',
   ];
+
   return parts.join('\n');
+}
+
+function buildFocusLines(focusList: string[]): string[] {
+  const focusItems = focusList.map((x) => x.trim()).filter(Boolean);
+  const uniq = Array.from(new Set(focusItems));
+  const n = uniq.length;
+  if (n === 0) return [];
+  if (n <= 2) {
+    return [
+      `• Focusklanken (moeten voorkomen, elk ten minste één keer): [${uniq.join(', ')}]`,
+      '  Voorbeeld: gebruik de lettergroep zichtbaar in een woord.',
+    ];
+  }
+  const need = Math.min(3, n);
+  return [
+    `• Focusklanken (laat minstens ${need} verschillende items terugkomen): [${uniq.join(', ')}]`,
+    "  Voorbeeld: 'maan' bevat [aa], 'bank' bevat [nk].",
+  ];
 }
 
 
