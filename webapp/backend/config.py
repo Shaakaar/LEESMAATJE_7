@@ -72,7 +72,7 @@ KEEP_AZURE_RUNNING = True
 
 # GPT model settings
 GPT_PROVIDER = os.getenv("GPT_TUTOR_PROVIDER", "openai")
-GPT_MODEL = os.getenv("GPT_TUTOR_MODEL", "gpt-4o-mini")
+GPT_MODEL = os.getenv("GPT_TUTOR_MODEL", "gpt-4o")
 # Temperature for GPT feedback (0 for deterministic output)
 GPT_TEMPERATURE = float(os.getenv("GPT_TUTOR_TEMPERATURE", "0.0"))
 
