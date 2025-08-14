@@ -1,6 +1,4 @@
-// Utilities to check Dutch decodability and build simple fallbacks
-
-import type { UnitSpec } from './contentConfig';
+// Utilities to check Dutch decodability
 
 const DIGRAPHS = [
   'aai',
@@ -100,29 +98,7 @@ export function isDecodable(
   return true;
 }
 
-const FALLBACK_NAMES = ['Sam', 'Rik', 'Mia', 'Noor', 'Lila', 'Pim'];
-const FALLBACK_VERBS = ['ziet', 'heeft', 'pakt', 'maakt'];
-
-function pickDecodable(
-  list: string[],
-  allowed: string[],
-): string | undefined {
-  return list.find((w) => isDecodable(w, allowed, ['CV', 'CVC', 'CVCC', 'CCVC'], 1));
-}
-
-export function buildFallback(unit: UnitSpec, allowed: string[]): {
-  sentences: string[];
-  directions: string[];
-} {
-  const name = pickDecodable(FALLBACK_NAMES, allowed) ?? 'Sam';
-  const sentences: string[] = [];
-  for (let i = 0; i < 5; i++) {
-    const verb = pickDecodable(FALLBACK_VERBS, allowed) ?? 'ziet';
-    const obj = unit.word_bank[i % unit.word_bank.length] ?? name.toLowerCase();
-    const s = `${name} ${verb} ${obj}.`;
-    sentences.push(s);
-  }
-  const directions = ['ga door', 'ga terug'];
-  return { sentences, directions };
-}
+// Previously this module provided a simple fallback story generator
+// based on a word bank. The main story pipeline no longer uses that
+// functionality, so it has been removed.
 
