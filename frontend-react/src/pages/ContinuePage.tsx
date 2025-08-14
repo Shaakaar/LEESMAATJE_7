@@ -17,6 +17,7 @@ export default function ContinuePage() {
     const level = localStorage.getItem('level');
     const direction = localStorage.getItem('direction_choice');
     const idx = Number(localStorage.getItem('direction_index'));
+    const focus = localStorage.getItem('focus') ?? '';
     const allowed = localStorage.getItem('allowed') ?? '';
     const patterns = localStorage.getItem('patterns') ?? '';
     const maxWords = localStorage.getItem('max_words') ?? '';
@@ -31,7 +32,7 @@ export default function ContinuePage() {
     }
 
     const ev = new EventSource(
-      `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(direction)}&story=${encodeURIComponent(storySoFar)}&allowed=${encodeURIComponent(allowed)}&patterns=${encodeURIComponent(patterns)}&max_words=${maxWords}`,
+      `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(direction)}&story=${encodeURIComponent(storySoFar)}&focus=${encodeURIComponent(focus)}&allowed=${encodeURIComponent(allowed)}&patterns=${encodeURIComponent(patterns)}&max_words=${maxWords}`,
     );
     const data: StoryItem[] = [];
 

@@ -24,6 +24,7 @@ export default function SessionPage() {
       if (!level || !unit) return;
       try {
         const unitIdx = level.units.findIndex((u) => u.id === unit.id);
+        const focusGraphemes = unit.focus_phonemes;
         const allowedGraphemes = Array.from(
           new Set(
             level.units
@@ -36,14 +37,14 @@ export default function SessionPage() {
 
         localStorage.setItem('level', level.id);
         localStorage.setItem('unit', unit.id);
+        localStorage.setItem('focus', focusGraphemes.join(','));
         localStorage.setItem('allowed', allowedGraphemes.join(','));
         localStorage.setItem('patterns', allowedPatterns.join(','));
         localStorage.setItem('max_words', String(maxWords));
 
         const data = await generateTurn({
           theme: 'demo',
-          level,
-          unit,
+          focusGraphemes,
           allowedGraphemes,
           allowedPatterns,
           maxWords,

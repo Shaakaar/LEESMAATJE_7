@@ -555,6 +555,7 @@ async def continue_story(
     level: str,
     direction: str,
     story: str | None = None,
+    focus: str | None = None,
     allowed: str | None = None,
     patterns: str | None = None,
     max_words: int | None = None,
@@ -566,20 +567,16 @@ async def continue_story(
     client = openai.AsyncOpenAI()
 
     sys_prompt = (
-        "Je bent een Nederlandse verhalenmaker voor jonge kinderen (4–8 jaar).\n"
-        "Doel en stijl (houd je hier aan):\n"
-        "• Schrijf in eenvoudig, kindvriendelijk Nederlands.\n"
-        "• Tegenwoordige tijd. Eén duidelijk idee per zin.\n"
-        "• Zinnen zijn kort: 3–8 woorden.\n"
-        "• Interpunctie: alleen een punt (.) aan het einde van elke zin.\n"
-        "• Namen zijn toegestaan; als je een naam gebruikt, houd die dan consequent in dit verhaal.\n"
-        "• Elke beurt is een mini-scène:\n"
-        "  (1) start/setting,\n"
-        "  (2–3) kleine stappen,\n"
-        "  (4) een zacht gevolg,\n"
-        "  (5) een klein spanningsmoment dat naar een keuze leidt.\n"
-        "• Geef daarna precies twee korte richtingzinnen (keuzes) in de gebiedende wijs, 2–4 woorden, parallel en betekenisvol.\n"
-        "\n"
+        "Je bent een Nederlandse verhalenmaker voor jonge kinderen (4–8 jaar).\n\n"
+        "Stijl (houd je hieraan):\n"
+        "• Eenvoudig, kindvriendelijk Nederlands in de tegenwoordige tijd.\n"
+        "• Korte zinnen: 3–8 woorden (of korter als nodig).\n"
+        "• Alleen een punt (.) aan het einde van elke zin.\n"
+        "• Namen zijn toegestaan; als je een naam gebruikt, houd die consequent.\n\n"
+        "Structuur per beurt:\n"
+        "• Vijf zinnen vormen samen één mini-scène.\n"
+        "• Zin 1–2 voeren de gekozen richting echt uit.\n"
+        "• Daarna geef je precies twee korte richtingzinnen (keuzes), gebiedende wijs, 2–4 woorden, parallel en betekenisvol.\n\n"
         "Uitvoer = ÉÉN JSON-object en verder niets:\n"
         "{\n"
         "  \"sentences\": [5 korte zinnen],\n"
@@ -588,24 +585,24 @@ async def continue_story(
         "Geen uitleg, geen extra tekst, geen markdown."
     )
     user_prompt = (
-        f"Thema: {theme}\n"
-        f"Niveau/Unit (optioneel): {level}\n"
+        f"Thema (optioneel): {theme}\n"
         f"Richting die is gekozen (vorige stap): {direction}\n"
-        + (f"Verhaal tot nu toe (optioneel): \"{story}\"\n" if story else "")
-        + "\nBeperkingen voor deze stap:\n"
-        + (
-            f"• Gebruik alleen woorden die decodabel zijn met deze letters/klanken: {allowed}. Vermijd andere klanken/spellingsclusters.\n"
-            if allowed
-            else ""
-        )
-        + (f"• Gebruik alleen deze woordpatronen: {patterns}.\n" if patterns else "")
-        + (f"• Maximaal {max_words} woorden per zin.\n" if max_words else "")
-        + "\nSchrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan en binnen deze grenzen blijven.\n"
+        + (f"Verhaal tot nu toe (optioneel): \"{story}\"\n" if story else "Verhaal tot nu toe (optioneel): \"\"\n")
+        + "\nBeperkingen voor deze stap (houd het natuurlijk):\n"
+        + f"• Focusklanken (deze wil ik sowieso terugzien): {focus or ''}\n"
+        + f"• Je mag daarnaast ook andere letters/klanken gebruiken die al geleerd zijn: {allowed or ''}\n"
+        + f"• Woordpatronen (informatief): {patterns or ''}\n"
+        + f"• Maximaal {max_words or 8} woorden per zin\n\n"
+        + "Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan en die\n"
+        + "minstens twee verschillende klanken uit de focuslijst bevatten.\n"
         + "Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden)."
     )
 
     resp = await client.chat.completions.create(
-        model=config.GPT_MODEL,
+        model="gpt-4o",
+        temperature=0.9,
+        top_p=1.0,
+        max_tokens=300,
         messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
         response_format={"type": "json_object"},
     )
