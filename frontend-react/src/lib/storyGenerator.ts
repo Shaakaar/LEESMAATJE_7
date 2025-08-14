@@ -9,26 +9,43 @@ export interface GenerateOptions {
   chosenDirection: string;
   storySoFar?: string;
   theme?: string;
-  temperature?: number;
 }
 
-const SYSTEM_MESSAGE = `Je bent een Nederlandse verhalenmaker voor jonge kinderen (4–8 jaar).
+const SYSTEM_MESSAGE = `Je bent een Nederlandse verhalenmaker voor kinderen die leren lezen op AVI-niveau Start t/m E3.
 
-Stijl (houd je hieraan):
-• Eenvoudig, kindvriendelijk Nederlands in de tegenwoordige tijd.
-• Korte zinnen: 3–8 woorden (of korter als nodig).
-• Alleen een punt (.) aan het einde van elke zin.
-• Namen zijn toegestaan; als je een naam gebruikt, houd die consequent.
+🎯 DOEL:
+Schrijf korte, begrijpelijke mini-verhaaltjes die kinderen helpen oefenen met lezen.
 
-Structuur per beurt:
-• Vijf zinnen vormen samen één mini-scène.
+👩‍🏫 STIJL:
+• Alleen tegenwoordige tijd.
+• Alleen correcte Nederlandse spelling en grammatica.
+• Alleen een punt (.) als leesteken — geen vraagtekens, uitroeptekens of aanhalingstekens.
+• Korte zinnen van 3–8 woorden.
+• Gebruik gevarieerde werkwoorden (niet steeds dezelfde).
+• Namen zijn toegestaan — houd ze consequent binnen het verhaal.
+• Laat kinderen zich de scène kunnen voorstellen (kleur, geluid, beweging).
+
+📐 STRUCTUUR:
+• Vijf zinnen vormen samen één logisch mini-verhaal.
 • Zin 1–2 voeren de gekozen richting echt uit.
-• Daarna geef je precies twee korte richtingzinnen (keuzes), gebiedende wijs, 2–4 woorden, parallel en betekenisvol.
+• Zin 3–5 bouwen logisch verder en eindigen met een klein spanningsmoment.
 
-Uitvoer = ÉÉN JSON-object en verder niets:
+🧭 KEUZES:
+• Geef daarna precies twee nieuwe richtingzinnen.
+• De keuzes zijn kort (2–4 woorden), in gebiedende wijs, logisch en evenwaardig.
+
+📌 FOCUSKLANKEN:
+• Gebruik minstens 3 woorden in het verhaal die een focusklank bevatten.
+• De focusklanken worden meegegeven in de gebruikersinstructie.
+• Gebruik ze als lettergroep in echte Nederlandse woorden (bijv. [aa] in "maan").
+
+👧 DOELGROEP:
+Kinderen van 4–7 jaar, AVI Start t/m E3.
+
+📦 UITVOER (STRICT JSON):
 {
   "sentences": [5 korte zinnen],
-  "directions": [2 korte keuzes]
+  "directions": [2 keuzes]
 }
 Geen uitleg, geen extra tekst, geen markdown.`;
 
@@ -40,7 +57,6 @@ export async function generateTurn({
   chosenDirection,
   storySoFar,
   theme,
-  temperature = 0.9,
 }: GenerateOptions) {
   const userPrompt = buildUserPrompt({
     chosenDirection,
@@ -64,14 +80,16 @@ export async function generateTurn({
 
   const res = await client.responses.create({
     model: 'gpt-4o',
-    temperature,
+    temperature: 1.0,
     top_p: 1.0,
+    presence_penalty: 0,
+    frequency_penalty: 0,
     max_output_tokens: 300,
+    response_format: { type: 'json_object' },
     input: [
       { role: 'system', content: SYSTEM_MESSAGE },
       { role: 'user', content: userPrompt },
     ],
-    text: { format: { type: 'json_object' } },
   });
 
   const json = res.output_text;
@@ -101,43 +119,30 @@ function buildUserPrompt(opts: {
     maxWords,
   } = opts;
 
-  const focusLines = buildFocusLines(focusGraphemes);
+  const uniq = [...new Set(focusGraphemes)];
+  const FOCUS_RULE_BLOCK =
+    uniq.length === 0
+      ? ''
+      : `• Gebruik minstens 3 keer een klank uit deze lijst: [${uniq.join(', ')}]\n`;
 
-  const parts = [
-    `Thema (optioneel): ${theme ?? ''}`,
-    `Richting die is gekozen (vorige stap): ${chosenDirection}`,
-    `Verhaal tot nu toe (optioneel): "${storySoFar ?? ''}"`,
-    '',
-    'Beperkingen voor deze stap (houd het natuurlijk):',
-    ...focusLines,
-    `• Je mag daarnaast ook andere letters/klanken gebruiken die al geleerd zijn: [${allowedGraphemes.join(', ')}]`,
-    `• Woordpatronen (informatief): [${allowedPatterns.join(', ')}]`,
-    `• Maximaal ${maxWords} woorden per zin`,
-    '',
-    'Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan.',
-    'Zin 1–2 voeren de gekozen richting echt uit.',
-    'Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden).',
-  ];
+  return `Thema (optioneel): ${theme ?? ''}
+Richting die is gekozen: ${chosenDirection}
+Verhaal tot nu toe: "${storySoFar ?? ''}"
 
-  return parts.join('\n');
-}
+🔤 KLANKEN EN STRUCTUREN:
+${FOCUS_RULE_BLOCK}• Je mag daarnaast ook andere eerder geleerde klanken gebruiken: [${allowedGraphemes.join(', ')}]
+• Toegestane woordstructuren (informatief): [${allowedPatterns.join(', ')}]
+• Maximaal ${maxWords} woorden per zin
 
-function buildFocusLines(focusList: string[]): string[] {
-  const focusItems = focusList.map((x) => x.trim()).filter(Boolean);
-  const uniq = Array.from(new Set(focusItems));
-  const n = uniq.length;
-  if (n === 0) return [];
-  if (n <= 2) {
-    return [
-      `• Focusklanken (moeten voorkomen, elk ten minste één keer): [${uniq.join(', ')}]`,
-      '  Voorbeeld: gebruik de lettergroep zichtbaar in een woord.',
-    ];
-  }
-  const need = Math.min(3, n);
-  return [
-    `• Focusklanken (laat minstens ${need} verschillende items terugkomen): [${uniq.join(', ')}]`,
-    "  Voorbeeld: 'maan' bevat [aa], 'bank' bevat [nk].",
-  ];
+🎬 SCHRIJF NU:
+Denk goed na over de gekozen richting en voer die uit in zin 1–2.
+Schrijf daarna drie zinnen die logisch verdergaan en eindigen in een klein spanningsmoment.
+
+Gebruik alleen bestaande Nederlandse woorden die passen bij de opgegeven klanken.
+Houd het vrolijk, veilig en geschikt voor jonge kinderen.
+
+Schrijf vijf korte zinnen die samen één mini-scène vormen.
+Geef daarna precies twee nieuwe keuzes, beide in gebiedende wijs (2–4 woorden).`;
 }
 
 
