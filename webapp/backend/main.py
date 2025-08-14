@@ -80,34 +80,20 @@ sent_index = 0
 models_ready = False
 
 SYSTEM_MESSAGE = (
-    "Je bent een Nederlandse verhalenmaker voor kinderen die leren lezen op AVI-niveau Start t/m E3.\n\n"
-    "🎯 DOEL:\n"
-    "Schrijf korte, begrijpelijke mini-verhaaltjes die kinderen helpen oefenen met lezen.\n\n"
-    "👩‍🏫 STIJL:\n"
-    "• Alleen tegenwoordige tijd.\n"
-    "• Alleen correcte Nederlandse spelling en grammatica.\n"
-    "• Alleen een punt (.) als leesteken — geen vraagtekens, uitroeptekens of aanhalingstekens.\n"
-    "• Korte zinnen van 3–8 woorden.\n"
-    "• Gebruik gevarieerde werkwoorden (niet steeds dezelfde).\n"
-    "• Namen zijn toegestaan — houd ze consequent binnen het verhaal.\n"
-    "• Laat kinderen zich de scène kunnen voorstellen (kleur, geluid, beweging).\n\n"
-    "📐 STRUCTUUR:\n"
-    "• Vijf zinnen vormen samen één logisch mini-verhaal.\n"
+    "Je bent een Nederlandse verhalenmaker voor jonge kinderen (4–8 jaar).\n\n"
+    "Stijl (houd je hieraan):\n"
+    "• Eenvoudig, kindvriendelijk Nederlands in de tegenwoordige tijd.\n"
+    "• Korte zinnen: 3–8 woorden (of korter als nodig).\n"
+    "• Alleen een punt (.) aan het einde van elke zin.\n"
+    "• Namen zijn toegestaan; als je een naam gebruikt, houd die consequent.\n\n"
+    "Structuur per beurt:\n"
+    "• Vijf zinnen vormen samen één mini-scène.\n"
     "• Zin 1–2 voeren de gekozen richting echt uit.\n"
-    "• Zin 3–5 bouwen logisch verder en eindigen met een klein spanningsmoment.\n\n"
-    "🧭 KEUZES:\n"
-    "• Geef daarna precies twee nieuwe richtingzinnen.\n"
-    "• De keuzes zijn kort (2–4 woorden), in gebiedende wijs, logisch en evenwaardig.\n\n"
-    "📌 FOCUSKLANKEN:\n"
-    "• Gebruik minstens 3 woorden in het verhaal die een focusklank bevatten.\n"
-    "• De focusklanken worden meegegeven in de gebruikersinstructie.\n"
-    "• Gebruik ze als lettergroep in echte Nederlandse woorden (bijv. [aa] in \"maan\").\n\n"
-    "👧 DOELGROEP:\n"
-    "Kinderen van 4–7 jaar, AVI Start t/m E3.\n\n"
-    "📦 UITVOER (STRICT JSON):\n"
+    "• Daarna geef je precies twee korte richtingzinnen (keuzes), gebiedende wijs, 2–4 woorden, parallel en betekenisvol.\n\n"
+    "Uitvoer = ÉÉN JSON-object en verder niets:\n"
     "{\n"
     "  \"sentences\": [5 korte zinnen],\n"
-    "  \"directions\": [2 keuzes]\n"
+    "  \"directions\": [2 korte keuzes]\n"
     "}\n"
     "Geen uitleg, geen extra tekst, geen markdown."
 )
@@ -159,36 +145,49 @@ def _print_timeline(results: dict) -> None:
             print(f"  {label}: {d:.1f} ms")
 
 
+def _build_focus_lines(focus_list: list[str]) -> list[str]:
+    focus_items = [x.strip() for x in focus_list if x.strip()]
+    uniq: list[str] = list(dict.fromkeys(focus_items))
+    n = len(uniq)
+    if n == 0:
+        return []
+    if n <= 2:
+        return [
+            f"• Focusklanken (moeten voorkomen, elk ten minste één keer): [{', '.join(uniq)}]",
+            "  Voorbeeld: gebruik de lettergroep zichtbaar in een woord.",
+        ]
+    need = min(3, n)
+    return [
+        f"• Focusklanken (laat minstens {need} verschillende items terugkomen): [{', '.join(uniq)}]",
+        "  Voorbeeld: 'maan' bevat [aa], 'bank' bevat [nk].",
+    ]
+
+
 def _build_user_prompt(
     theme: str,
-    chosen_direction: str,
-    story_so_far: str | None,
-    focus_graphemes: list[str],
-    allowed_graphemes: list[str],
-    allowed_patterns: list[str],
+    direction: str,
+    story: str | None,
+    focus: list[str],
+    allowed: list[str],
+    patterns: list[str],
     max_words: int,
 ) -> str:
-    uniq = list(dict.fromkeys(focus_graphemes))
-    focus_rule_block = (
-        "" if len(uniq) == 0 else f"• Gebruik minstens 3 keer een klank uit deze lijst: [{', '.join(uniq)}]\n"
-    )
-    return (
-        f"Thema (optioneel): {theme}\n"
-        f"Richting die is gekozen: {chosen_direction}\n"
-        f"Verhaal tot nu toe: \"{story_so_far or ''}\"\n\n"
-        "🔤 KLANKEN EN STRUCTUREN:\n"
-        f"{focus_rule_block}"
-        f"• Je mag daarnaast ook andere eerder geleerde klanken gebruiken: [{', '.join(allowed_graphemes)}]\n"
-        f"• Toegestane woordstructuren (informatief): [{', '.join(allowed_patterns)}]\n"
-        f"• Maximaal {max_words} woorden per zin\n\n"
-        "🎬 SCHRIJF NU:\n"
-        "Denk goed na over de gekozen richting en voer die uit in zin 1–2.\n"
-        "Schrijf daarna drie zinnen die logisch verdergaan en eindigen in een klein spanningsmoment.\n\n"
-        "Gebruik alleen bestaande Nederlandse woorden die passen bij de opgegeven klanken.\n"
-        "Houd het vrolijk, veilig en geschikt voor jonge kinderen.\n\n"
-        "Schrijf vijf korte zinnen die samen één mini-scène vormen.\n"
-        "Geef daarna precies twee nieuwe keuzes, beide in gebiedende wijs (2–4 woorden)."
-    )
+    lines = [
+        f"Thema (optioneel): {theme}",
+        f"Richting die is gekozen (vorige stap): {direction}",
+        f"Verhaal tot nu toe (optioneel): \"{story or ''}\"",
+        "",
+        "Beperkingen voor deze stap (houd het natuurlijk):",
+        *_build_focus_lines(focus),
+        f"• Je mag daarnaast ook andere letters/klanken gebruiken die al geleerd zijn: [{', '.join(allowed)}]",
+        f"• Woordpatronen (informatief): [{', '.join(patterns)}]",
+        f"• Maximaal {max_words} woorden per zin",
+        "",
+        "Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan.",
+        "Zin 1–2 voeren de gekozen richting echt uit.",
+        "Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden).",
+    ]
+    return "\n".join(lines)
 
 
 @app.post("/api/register")
@@ -645,15 +644,15 @@ async def continue_story(
     )
     sys_prompt = SYSTEM_MESSAGE
     if os.environ.get("DEBUG"):
-        print("--- SYSTEM PROMPT ---\n", sys_prompt)
-        print("--- USER PROMPT ---\n", user_prompt)
+        console.rule("[bold blue]System[/bold blue]")
+        console.print(sys_prompt)
+        console.rule("[bold blue]User[/bold blue]")
+        console.print(user_prompt)
 
     resp = await client.chat.completions.create(
         model="gpt-4o",
-        temperature=1.0,
+        temperature=0.9,
         top_p=1.0,
-        presence_penalty=0.0,
-        frequency_penalty=0.0,
         max_tokens=300,
         messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
         response_format={"type": "json_object"},
