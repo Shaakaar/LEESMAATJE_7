@@ -1,17 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AppShell from '@/components/layout/AppShell';
-import { loadContentConfig } from '@/lib/contentConfig';
+import { findLevelUnit, getAllowedKlanken } from '@/lib/contentConfig';
 import { generateStory, generateWords } from '@/lib/storyGenerator';
 import { ShimmerText } from '@/components/ShimmerText';
-
-function findLevelUnit(levelId: string, unitId: string) {
-  const cfg = loadContentConfig();
-  const level = cfg.levels.find((l) => l.id === levelId);
-  if (!level) return { level: undefined, unit: undefined };
-  const unit = level.units.find((u) => u.id === unitId);
-  return { level, unit };
-}
 
 export default function SessionPage() {
   const { levelId, unitId } = useParams<{ levelId: string; unitId: string }>();
@@ -23,15 +15,8 @@ export default function SessionPage() {
       const { level, unit } = findLevelUnit(levelId, unitId);
       if (!level || !unit) return;
       try {
-        const unitIdx = level.units.findIndex((u) => u.id === unit.id);
         const focusGraphemes = unit.focus_klanken;
-        const allowedGraphemes = Array.from(
-          new Set(
-            level.units
-              .slice(0, unitIdx + 1)
-              .flatMap((u) => u.focus_klanken),
-          ),
-        );
+        const allowedGraphemes = getAllowedKlanken(level, unit.id);
         const allowedPatterns = unit.allowed_patterns;
         const strictForbid = unit.strict_forbid;
         const maxWords = unit.sentence_rules?.max_words ?? 7;
