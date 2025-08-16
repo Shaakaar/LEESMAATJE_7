@@ -80,6 +80,49 @@ app.mount(
 sent_index = 0
 models_ready = False
 
+# Canonical Dutch grapheme inventory used for decodability checks.
+# Include multi-letter vowel groups and consonant clusters that function as a unit.
+DUTCH_MULTI_GRAPHEMES: list[str] = [
+    # long/double vowels & common digraphs
+    "aa",
+    "ee",
+    "oo",
+    "uu",
+    "ij",
+    "ei",
+    "ie",
+    "ou",
+    "au",
+    "ui",
+    "eu",
+    "oe",
+    # complex clusters and endings
+    "ng",
+    "nk",
+    "ch",
+    "sch",
+    # vowel triphthongs/groups introduced later in Start
+    "aai",
+    "ooi",
+    "oei",
+    # -uw families
+    "uw",
+    "ieuw",
+    "eeuw",
+]
+
+
+def forbidden_sequences_from_allowed(allowed_list: list[str]) -> list[str]:
+    """Return multi-letter graphemes that are NOT allowed for this unit."""
+    allowed = {a.strip() for a in allowed_list if a and a.strip()}
+    # We only forbid multi-letter graphemes; single letters are handled by 'allowed' itself.
+    return [g for g in DUTCH_MULTI_GRAPHEMES if g not in allowed]
+
+
+def contains_forbidden_seq(text: str, forbidden: list[str]) -> bool:
+    t = text.lower()
+    return any(seq in t for seq in forbidden if seq)
+
 
 def _dump_prompt(prompt_text: str, json_text: str) -> None:
     try:
@@ -212,6 +255,17 @@ def build_user_prompt_story(
         "KLANKEN EN STRUCTUREN:",
         build_focus_rule(focus_list),
         build_allowed_rule(level, allowed_list, strict_forbid),
+    ]
+
+    if strict_forbid:
+        forb = forbidden_sequences_from_allowed(allowed_list)
+        if forb:
+            parts += [
+                f"• Verboden lettergroepen (verboden ook als losse letters direct naast elkaar staan): [{', '.join(forb)}]",
+                "  Voorbeelden: o+u → 'ou' = verboden; s+c+h → 'sch' = verboden; n+g → 'ng' = verboden.",
+            ]
+
+    parts += [
         f"• Toegestane woordstructuren (informatief): [{', '.join(p for p in patterns_list if p.strip())}]",
         f"• Maximaal {max_words} woorden per zin",
         "",
@@ -602,8 +656,18 @@ async def generate_words(payload: WordsPayload):
         "• Eén woord per item. Geen hoofdletters, geen namen. Bij voorkeur één lettergreep.\n\n"
         "Uitvoer (STRICT JSON): { \"words\": [8 strings] }"
     )
+    forb = forbidden_sequences_from_allowed(payload.allowed)
+    forbidden_line = ""
+    if forb:
+        forbidden_line = (
+            "Verboden lettergroepen (ook als losse letters direct naast elkaar): "
+            f"[{', '.join(forb)}]\n"
+            "Voorbeelden: o+u → 'ou' is verboden; s+c+h → 'sch' is verboden; n+g → 'ng' is verboden.\n"
+        )
+
     user_prompt = (
         f"Toegestane letters/klanken (strikt): [{', '.join(payload.allowed)}]\n"
+        f"{forbidden_line}"
         f"Focusklanken: [{', '.join(payload.focus)}]\n"
         f"Woordpatronen (informatief): [{', '.join(payload.patterns)}]\n"
         "Genereer nu de 8 woorden."
@@ -616,7 +680,35 @@ async def generate_words(payload: WordsPayload):
         messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
         response_format={"type": "json_object"},
     )
-    return JSONResponse(content=json.loads(resp.choices[0].message.content))
+    j = json.loads(resp.choices[0].message.content)
+    words = [w.strip() for w in j.get("words", []) if isinstance(w, str)]
+    clean = [w for w in words if not contains_forbidden_seq(w, forb)]
+
+    # Optional single retry if we lost items:
+    if len(clean) < 8 and forb:
+        bad = [w for w in words if w not in clean]
+        retry_user = (
+            user_prompt
+            + "\nLET OP: De vorige lijst bevatte verboden lettergroepen in: "
+            + ", ".join(bad)
+            + ". Genereer 8 nieuwe, allemaal toegestaan."
+        )
+        resp2 = await client.chat.completions.create(
+            model="gpt-4o",
+            temperature=1.0,
+            top_p=1.0,
+            max_tokens=200,
+            messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": retry_user}],
+            response_format={"type": "json_object"},
+        )
+        words2 = [
+            w.strip()
+            for w in json.loads(resp2.choices[0].message.content).get("words", [])
+            if isinstance(w, str)
+        ]
+        clean = [w for w in words2 if not contains_forbidden_seq(w, forb)]
+
+    return JSONResponse(content={"words": clean[:8]})
 
 
 @app.post("/api/continue_story")
