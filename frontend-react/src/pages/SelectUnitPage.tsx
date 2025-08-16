@@ -16,7 +16,7 @@ export default function SelectUnitPage() {
             <li key={u.id} className="p-4 bg-white shadow rounded">
               <div className="font-semibold">Eenheid {u.label}</div>
               <div className="text-sm text-slate-600">
-                Klanken: {u.focus_phonemes.join(', ')}
+                Klanken: {u.focus_klanken.join(', ')}
               </div>
               <div className="text-sm text-slate-600">
                 Voorbeelden: {u.word_bank.slice(0, 3).join(', ')}

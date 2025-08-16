@@ -17,11 +17,13 @@ export type UnitId =
   | 'K'
   | 'L';
 
+export type Mode = 'words' | 'story';
+
 export interface SentenceRules {
-  present: boolean; // always true
-  max_words: number;
+  present: true;
   punctuation: 'period_only';
-  allow_names: boolean;
+  max_words: number;
+  focus_usage_min?: number;
 }
 
 export interface MasteryThresholds {
@@ -33,12 +35,14 @@ export interface MasteryThresholds {
 export interface UnitSpec {
   id: UnitId;
   label: string;
-  focus_phonemes: string[];
+  mode: Mode;
+  strict_forbid: boolean;
+  focus_klanken: string[];
   allowed_patterns: string[];
   word_bank: string[];
-  sentence_rules: SentenceRules;
-  starts_sentences: boolean;
-  mastery_thresholds: MasteryThresholds;
+  sentence_rules?: SentenceRules;
+  starts_sentences?: boolean;
+  mastery_thresholds?: MasteryThresholds;
 }
 
 export interface LevelSpec {
@@ -64,59 +68,49 @@ export const CONTENT_CONFIG: ContentConfig = {
         {
           id: 'A',
           label: 'A',
-          focus_phonemes: ['m', 'r', 'v', 'i', 's', 'aa', 'p', 'e'],
+          mode: 'words',
+          strict_forbid: true,
+          focus_klanken: ['m', 'r', 'v', 'i', 's', 'aa', 'p', 'e'],
           allowed_patterns: ['CV', 'CVC'],
           word_bank: ['ik', 'maan', 'roos', 'vis', 'pen', 'aan', 'en', 'sok'],
-          sentence_rules: {
-            present: true,
-            max_words: 6,
-            punctuation: 'period_only',
-            allow_names: true,
-          },
           starts_sentences: false,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
         },
         {
           id: 'B',
           label: 'B',
-          focus_phonemes: ['t', 'n', 'b', 'oo', 'ee'],
+          mode: 'words',
+          strict_forbid: true,
+          focus_klanken: ['t', 'n', 'b', 'oo', 'ee'],
           allowed_patterns: ['CV', 'CVC', 'CVCC'],
           word_bank: ['teen', 'een', 'neus', 'buik', 'oog'],
-          sentence_rules: {
-            present: true,
-            max_words: 6,
-            punctuation: 'period_only',
-            allow_names: true,
-          },
           starts_sentences: false,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
         },
         {
           id: 'C',
           label: 'C',
-          focus_phonemes: ['d', 'oe', 'k', 'ij', 'z'],
+          mode: 'words',
+          strict_forbid: true,
+          focus_klanken: ['d', 'oe', 'k', 'ij', 'z'],
           allowed_patterns: ['CV', 'CVC', 'CVCC'],
           word_bank: ['doos', 'poes', 'koek', 'ijs', 'zeep'],
-          sentence_rules: {
-            present: true,
-            max_words: 6,
-            punctuation: 'period_only',
-            allow_names: true,
-          },
           starts_sentences: false,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
         },
         {
           id: 'D',
           label: 'D',
-          focus_phonemes: ['h', 'w', 'o', 'a', 'u'],
+          mode: 'story',
+          strict_forbid: false,
+          focus_klanken: ['h', 'w', 'o', 'a', 'u'],
           allowed_patterns: ['CV', 'CVC', 'CVCC'],
           word_bank: ['huis', 'weg', 'bos', 'tak', 'hut'],
           sentence_rules: {
             present: true,
-            max_words: 7,
             punctuation: 'period_only',
-            allow_names: true,
+            max_words: 7,
+            focus_usage_min: 3,
           },
           starts_sentences: true,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
@@ -124,14 +118,16 @@ export const CONTENT_CONFIG: ContentConfig = {
         {
           id: 'E',
           label: 'E',
-          focus_phonemes: ['eu', 'j', 'ie', 'l', 'ou', 'uu'],
+          mode: 'story',
+          strict_forbid: false,
+          focus_klanken: ['eu', 'j', 'ie', 'l', 'ou', 'uu'],
           allowed_patterns: ['CV', 'CVC', 'CVCC', 'CCVC'],
           word_bank: ['reus', 'jas', 'riem', 'bijl', 'hout', 'vuur'],
           sentence_rules: {
             present: true,
-            max_words: 7,
             punctuation: 'period_only',
-            allow_names: true,
+            max_words: 7,
+            focus_usage_min: 3,
           },
           starts_sentences: true,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
@@ -139,14 +135,16 @@ export const CONTENT_CONFIG: ContentConfig = {
         {
           id: 'F',
           label: 'F',
-          focus_phonemes: ['g', 'ui', 'au', 'f', 'ei'],
+          mode: 'story',
+          strict_forbid: false,
+          focus_klanken: ['g', 'ui', 'au', 'f', 'ei'],
           allowed_patterns: ['CV', 'CVC', 'CVCC', 'CCVC'],
           word_bank: ['geit', 'pauw', 'duif', 'ei'],
           sentence_rules: {
             present: true,
-            max_words: 7,
             punctuation: 'period_only',
-            allow_names: true,
+            max_words: 7,
+            focus_usage_min: 3,
           },
           starts_sentences: true,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
@@ -154,14 +152,16 @@ export const CONTENT_CONFIG: ContentConfig = {
         {
           id: 'G',
           label: 'G',
-          focus_phonemes: ['sch', 'ng'],
+          mode: 'story',
+          strict_forbid: false,
+          focus_klanken: ['sch', 'ng'],
           allowed_patterns: ['CV', 'CVC', 'CCVC', 'CVCC'],
           word_bank: ['kist', 'drop', 'hond', 'slang', 'bank', 'springt', 'meeuw', 'ja', 'zo'],
           sentence_rules: {
             present: true,
-            max_words: 8,
             punctuation: 'period_only',
-            allow_names: true,
+            max_words: 7,
+            focus_usage_min: 3,
           },
           starts_sentences: true,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
@@ -169,14 +169,16 @@ export const CONTENT_CONFIG: ContentConfig = {
         {
           id: 'H',
           label: 'H',
-          focus_phonemes: ['nk', 'ch'],
+          mode: 'story',
+          strict_forbid: false,
+          focus_klanken: ['nk', 'ch'],
           allowed_patterns: ['CV', 'CVC', 'CCVC', 'CVCC'],
           word_bank: ['bank', 'licht'],
           sentence_rules: {
             present: true,
-            max_words: 8,
             punctuation: 'period_only',
-            allow_names: true,
+            max_words: 7,
+            focus_usage_min: 3,
           },
           starts_sentences: true,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
@@ -184,14 +186,16 @@ export const CONTENT_CONFIG: ContentConfig = {
         {
           id: 'I',
           label: 'I',
-          focus_phonemes: ['aai', 'ooi', 'oei'],
+          mode: 'story',
+          strict_forbid: false,
+          focus_klanken: ['aai', 'ooi', 'oei'],
           allowed_patterns: ['CV', 'CVC', 'CCVC', 'CVCC'],
           word_bank: ['kraai', 'kooi', 'groei'],
           sentence_rules: {
             present: true,
-            max_words: 8,
             punctuation: 'period_only',
-            allow_names: true,
+            max_words: 7,
+            focus_usage_min: 3,
           },
           starts_sentences: true,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
@@ -199,14 +203,16 @@ export const CONTENT_CONFIG: ContentConfig = {
         {
           id: 'J',
           label: 'J',
-          focus_phonemes: ['ieuw', 'eeuw', 'uw'],
+          mode: 'story',
+          strict_forbid: false,
+          focus_klanken: ['ieuw', 'eeuw', 'uw'],
           allowed_patterns: ['CV', 'CVC', 'CCVC', 'CVCC'],
           word_bank: ['nieuw', 'leeuw', 'uw'],
           sentence_rules: {
             present: true,
-            max_words: 9,
             punctuation: 'period_only',
-            allow_names: true,
+            max_words: 7,
+            focus_usage_min: 3,
           },
           starts_sentences: true,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
@@ -214,14 +220,16 @@ export const CONTENT_CONFIG: ContentConfig = {
         {
           id: 'K',
           label: 'K',
-          focus_phonemes: ['vr', 'sl', '-lijk', '-tig', '-ing'],
+          mode: 'story',
+          strict_forbid: false,
+          focus_klanken: ['vr', 'sl', '-lijk', '-tig', '-ing'],
           allowed_patterns: ['CV', 'CVC', 'CCVC', 'CVCC'],
           word_bank: ['vragen', 'spelen', 'schotel', 'sturen', 'moeilijk', 'koning'],
           sentence_rules: {
             present: true,
-            max_words: 9,
             punctuation: 'period_only',
-            allow_names: true,
+            max_words: 7,
+            focus_usage_min: 3,
           },
           starts_sentences: true,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
@@ -229,14 +237,16 @@ export const CONTENT_CONFIG: ContentConfig = {
         {
           id: 'L',
           label: 'L',
-          focus_phonemes: ['consolideer'],
+          mode: 'story',
+          strict_forbid: false,
+          focus_klanken: ['consolideer'],
           allowed_patterns: ['CV', 'CVC', 'CCVC', 'CVCC'],
           word_bank: [],
           sentence_rules: {
             present: true,
-            max_words: 9,
             punctuation: 'period_only',
-            allow_names: true,
+            max_words: 7,
+            focus_usage_min: 3,
           },
           starts_sentences: true,
           mastery_thresholds: { accuracy: 0.93, sessions: 2 },
