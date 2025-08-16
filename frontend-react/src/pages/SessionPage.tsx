@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AppShell from '@/components/layout/AppShell';
 import { loadContentConfig } from '@/lib/contentConfig';
-import { generateTurn } from '@/lib/storyGenerator';
+import { generateStory, generateWords } from '@/lib/storyGenerator';
 import { ShimmerText } from '@/components/ShimmerText';
 
 function findLevelUnit(levelId: string, unitId: string) {
@@ -24,16 +24,17 @@ export default function SessionPage() {
       if (!level || !unit) return;
       try {
         const unitIdx = level.units.findIndex((u) => u.id === unit.id);
-        const focusGraphemes = unit.focus_phonemes;
+        const focusGraphemes = unit.focus_klanken;
         const allowedGraphemes = Array.from(
           new Set(
             level.units
               .slice(0, unitIdx + 1)
-              .flatMap((u) => u.focus_phonemes),
+              .flatMap((u) => u.focus_klanken),
           ),
         );
         const allowedPatterns = unit.allowed_patterns;
-        const maxWords = unit.sentence_rules?.max_words ?? 8;
+        const strictForbid = unit.strict_forbid;
+        const maxWords = unit.sentence_rules?.max_words ?? 7;
 
         localStorage.setItem('level', level.id);
         localStorage.setItem('unit', unit.id);
@@ -41,16 +42,8 @@ export default function SessionPage() {
         localStorage.setItem('allowed', allowedGraphemes.join(','));
         localStorage.setItem('patterns', allowedPatterns.join(','));
         localStorage.setItem('max_words', String(maxWords));
+        localStorage.setItem('strict_forbid', String(strictForbid));
 
-        const data = await generateTurn({
-          theme: 'demo',
-          focusGraphemes,
-          allowedGraphemes,
-          allowedPatterns,
-          maxWords,
-          chosenDirection: 'start',
-          storySoFar: '',
-        });
         async function tts(text: string) {
           const res = await fetch('/api/tts', {
             method: 'POST',
@@ -69,8 +62,40 @@ export default function SessionPage() {
           const j = (await res.json()) as { audio: string };
           return j.audio;
         }
+
+        if (unit.mode === 'words') {
+          const data = await generateWords({
+            levelId: level.id,
+            unitId: unit.id,
+            focusGraphemes,
+            allowedGraphemes,
+            allowedPatterns,
+          });
+          const words = await Promise.all(
+            data.words.map(async (w: string) => {
+              const audio = await ttsWord(w);
+              return { type: 'sentence' as const, text: w, audio, words: [audio] };
+            }),
+          );
+          localStorage.setItem('story_data', JSON.stringify(words));
+          navigate('/story');
+          return;
+        }
+
+        const data = await generateStory({
+          theme: 'demo',
+          levelId: level.id,
+          unitId: unit.id,
+          focusGraphemes,
+          allowedGraphemes,
+          allowedPatterns,
+          maxWords,
+          chosenDirection: 'start',
+          storySoFar: '',
+          strictForbid,
+        });
         const sentences = await Promise.all(
-          data.sentences.map(async (s) => ({
+          data.sentences.map(async (s: string) => ({
             type: 'sentence' as const,
             text: s,
             audio: await tts(s),
@@ -78,7 +103,7 @@ export default function SessionPage() {
           })),
         );
         const directions = await Promise.all(
-          data.directions.map(async (d) => ({
+          data.directions.map(async (d: string) => ({
             type: 'direction' as const,
             text: d,
             audio: await tts(d),

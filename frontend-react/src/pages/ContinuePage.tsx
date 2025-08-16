@@ -21,6 +21,7 @@ export default function ContinuePage() {
     const allowed = localStorage.getItem('allowed') ?? '';
     const patterns = localStorage.getItem('patterns') ?? '';
     const maxWords = localStorage.getItem('max_words') ?? '';
+    const strictForbid = localStorage.getItem('strict_forbid') ?? '';
     const storySoFar = JSON.parse(localStorage.getItem('story_data') ?? '[]')
       .filter((i: StoryItem) => i.type === 'sentence')
       .map((i: StoryItem) => i.text)
@@ -32,7 +33,7 @@ export default function ContinuePage() {
     }
 
     const ev = new EventSource(
-      `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(direction)}&story=${encodeURIComponent(storySoFar)}&focus=${encodeURIComponent(focus)}&allowed=${encodeURIComponent(allowed)}&patterns=${encodeURIComponent(patterns)}&max_words=${maxWords}`,
+      `/api/continue_story?theme=${theme}&level=${level}&direction=${encodeURIComponent(direction)}&story=${encodeURIComponent(storySoFar)}&focus=${encodeURIComponent(focus)}&allowed=${encodeURIComponent(allowed)}&patterns=${encodeURIComponent(patterns)}&max_words=${maxWords}&strict_forbid=${strictForbid}`,
     );
     const data: StoryItem[] = [];
 

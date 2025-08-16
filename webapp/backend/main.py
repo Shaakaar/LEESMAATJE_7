@@ -18,6 +18,7 @@ import shutil
 import sqlite3
 import asyncio
 from rich.console import Console
+from pydantic import BaseModel
 
 from . import config, storage
 from .session_manager import EnginePool
@@ -79,25 +80,6 @@ app.mount(
 sent_index = 0
 models_ready = False
 
-SYSTEM_MESSAGE = (
-    "Je bent een Nederlandse verhalenmaker voor jonge kinderen (4–8 jaar).\n\n"
-    "Stijl (houd je hieraan):\n"
-    "• Eenvoudig, kindvriendelijk Nederlands in de tegenwoordige tijd.\n"
-    "• Korte zinnen: 3–8 woorden (of korter als nodig).\n"
-    "• Alleen een punt (.) aan het einde van elke zin.\n"
-    "• Namen zijn toegestaan; als je een naam gebruikt, houd die consequent.\n\n"
-    "Structuur per beurt:\n"
-    "• Vijf zinnen vormen samen één mini-scène.\n"
-    "• Zin 1–2 voeren de gekozen richting echt uit.\n"
-    "• Daarna geef je precies twee korte richtingzinnen (keuzes), gebiedende wijs, 2–4 woorden, parallel en betekenisvol.\n\n"
-    "Uitvoer = ÉÉN JSON-object en verder niets:\n"
-    "{\n"
-    "  \"sentences\": [5 korte zinnen],\n"
-    "  \"directions\": [2 korte keuzes]\n"
-    "}\n"
-    "Geen uitleg, geen extra tekst, geen markdown."
-)
-
 
 def _dump_prompt(prompt_text: str, json_text: str) -> None:
     try:
@@ -145,49 +127,122 @@ def _print_timeline(results: dict) -> None:
             print(f"  {label}: {d:.1f} ms")
 
 
-def _build_focus_lines(focus_list: list[str]) -> list[str]:
-    focus_items = [x.strip() for x in focus_list if x.strip()]
-    uniq: list[str] = list(dict.fromkeys(focus_items))
-    n = len(uniq)
-    if n == 0:
-        return []
-    if n <= 2:
-        return [
-            f"• Focusklanken (laat ze samen minstens drie keer terugkomen, elk ten minste één keer): [{', '.join(uniq)}]",
-            "  Voorbeeld: gebruik de lettergroep zichtbaar in een woord.",
-        ]
-    need = min(3, n)
-    return [
-        f"• Focusklanken (laat minstens {need} verschillende items terugkomen): [{', '.join(uniq)}]",
-        "  Voorbeeld: 'maan' bevat [aa], 'bank' bevat [nk].",
-    ]
+def get_system_prompt_by_level(level: str) -> str:
+    lv = (level or "").lower()
+    def base(max_words_upper: int) -> str:
+        return (
+            "Je bent een Nederlandse verhalenmaker voor kinderen die leren lezen.\n"
+            "Doel: schrijf korte, begrijpelijke mini-verhaaltjes die kinderen helpen oefenen met lezen.\n\n"
+            "STIJL:\n"
+            "• Alleen tegenwoordige tijd.\n"
+            "• Alleen correcte Nederlandse spelling en grammatica.\n"
+            "• Alleen een punt (.) als leesteken — geen vraagtekens, uitroeptekens of aanhalingstekens.\n"
+            f"• Korte zinnen van 3–{max_words_upper} woorden.\n"
+            "• Gevarieerde werkwoorden; vermijd herhaling van dezelfde stam.\n"
+            "• Namen mogen; houd ze consequent binnen het verhaal.\n"
+            "• Vermijd ingewikkelde zinsbouw (geen bijzinnen of inversie).\n"
+            "• Laat kinderen zich de scène kunnen voorstellen (kleur, geluid, beweging).\n\n"
+            "STRUCTUUR PER BEURT:\n"
+            "• Vijf zinnen vormen één logisch mini-verhaal.\n"
+            "• Zin 1–2 voeren de gekozen richting echt uit.\n"
+            "• Zin 3–5 bouwen logisch verder en eindigen met een klein spanningsmoment.\n\n"
+            "KEUZES:\n"
+            "• Geef daarna precies twee richtingzinnen (2–4 woorden), gebiedende wijs, logisch en evenwaardig.\n\n"
+            "FOCUSKLANKEN:\n"
+            "• Gebruik minstens 3 woorden in het verhaal die een focusklank bevatten (meegegeven door de gebruiker).\n"
+            "• Gebruik ze als lettergroep in echte Nederlandse woorden (bijv. [aa] in \"maan\").\n\n"
+            "UITVOER (STRICT JSON):\n"
+            "{\n"
+            "  \"sentences\": [5 korte zinnen],\n"
+            "  \"directions\": [2 korte keuzes]\n"
+            "}\n"
+            "Geen uitleg, geen extra tekst, geen markdown."
+        )
+    if "start" in lv:
+        return base(7)
+    if "m3" in lv:
+        return base(8)
+    if "e3" in lv:
+        return base(9)
+    if "m4" in lv:
+        return base(10)
+    if "e4" in lv:
+        return base(12)
+    return base(8)
 
 
-def _build_user_prompt(
+def build_allowed_rule(level: str, allowed_list: list[str], strict_forbid: bool) -> str:
+    if strict_forbid or "start" in (level or "").lower():
+        return (
+            "• Gebruik uitsluitend woorden die volledig zijn opgebouwd uit deze letters/klanken: "
+            f"[{', '.join(allowed_list)}]. Andere letters/klanken zijn VERBODEN."
+        )
+    return (
+        "• Je mag daarnaast ook andere eerder geleerde letters/klanken gebruiken: "
+        f"[{', '.join(allowed_list)}]"
+    )
+
+
+def build_focus_rule(focus_list: list[str]) -> str:
+    uniq = [x.strip() for x in dict.fromkeys(focus_list) if x.strip()]
+    if not uniq:
+        return ""
+    return (
+        "• Gebruik minstens 3 keer een klank uit deze lijst in de 5 zinnen: "
+        f"[{', '.join(uniq)}]"
+    )
+
+
+def build_user_prompt_story(
     theme: str,
     direction: str,
-    story: str | None,
-    focus: list[str],
-    allowed: list[str],
-    patterns: list[str],
+    story: str,
+    level: str,
+    focus_list: list[str],
+    allowed_list: list[str],
+    patterns_list: list[str],
     max_words: int,
+    strict_forbid: bool,
 ) -> str:
-    lines = [
+    parts = [
         f"Thema (optioneel): {theme}",
-        f"Richting die is gekozen (vorige stap): {direction}",
-        f"Verhaal tot nu toe (optioneel): \"{story or ''}\"",
+        f"Richting die is gekozen: {direction}",
+        f"Verhaal tot nu toe: \"{story or ''}\"",
         "",
-        "Beperkingen voor deze stap (houd het natuurlijk):",
-        *_build_focus_lines(focus),
-        f"• Je mag daarnaast ook andere letters/klanken gebruiken die al geleerd zijn: [{', '.join(allowed)}]",
-        f"• Woordpatronen (informatief): [{', '.join(patterns)}]",
+        "KLANKEN EN STRUCTUREN:",
+        build_focus_rule(focus_list),
+        build_allowed_rule(level, allowed_list, strict_forbid),
+        f"• Toegestane woordstructuren (informatief): [{', '.join(p for p in patterns_list if p.strip())}]",
         f"• Maximaal {max_words} woorden per zin",
         "",
-        "Schrijf vijf korte, kindvriendelijke zinnen die logisch doorgaan.",
-        "Zin 1–2 voeren de gekozen richting echt uit.",
-        "Geef daarna precies twee nieuwe keuzes (gebiedende wijs, 2–4 woorden).",
+        "SCHRIJF NU:",
+        "Denk goed na over de gekozen richting en voer die uit in zin 1–2.",
+        "Schrijf daarna drie zinnen die logisch verdergaan en eindigen in een klein spanningsmoment.",
+        "Gebruik alleen bestaande Nederlandse woorden die passen bij de opgegeven klanken.",
+        "Schrijf vijf korte zinnen die samen één mini-scène vormen.",
+        "Geef daarna precies twee nieuwe keuzes, beide in gebiedende wijs (2–4 woorden).",
     ]
-    return "\n".join(lines)
+    return "\n".join([p for p in parts if p and p.strip()])
+
+
+class WordsPayload(BaseModel):
+    level: str
+    focus: list[str]
+    allowed: list[str]
+    patterns: list[str]
+
+
+class StoryPayload(BaseModel):
+    theme: str | None = None
+    level: str
+    unit: str | None = None
+    direction: str
+    story: str | None = None
+    focus: list[str] = []
+    allowed: list[str] = []
+    patterns: list[str] = []
+    max_words: int | None = None
+    strict_forbid: bool = False
 
 
 @app.post("/api/register")
@@ -533,6 +588,66 @@ async def realtime_stop(sid: str, request: Request, background: BackgroundTasks)
 # ---------------------------------------------------------------------------
 
 
+@app.post("/api/generate_words")
+async def generate_words(payload: WordsPayload):
+    import openai
+
+    client = openai.AsyncOpenAI()
+
+    sys_prompt = (
+        "Je genereert oefenwoorden voor beginnende lezers.\n"
+        "Regels:\n"
+        "• Genereer exact 8 decodabele Nederlandse woorden.\n"
+        "• Gebruik uitsluitend de opgegeven letters/klanken (andere zijn VERBODEN).\n"
+        "• Eén woord per item. Geen hoofdletters, geen namen. Bij voorkeur één lettergreep.\n\n"
+        "Uitvoer (STRICT JSON): { \"words\": [8 strings] }"
+    )
+    user_prompt = (
+        f"Toegestane letters/klanken (strikt): [{', '.join(payload.allowed)}]\n"
+        f"Focusklanken: [{', '.join(payload.focus)}]\n"
+        f"Woordpatronen (informatief): [{', '.join(payload.patterns)}]\n"
+        "Genereer nu de 8 woorden."
+    )
+    resp = await client.chat.completions.create(
+        model="gpt-4o",
+        temperature=1.0,
+        top_p=1.0,
+        max_tokens=200,
+        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
+        response_format={"type": "json_object"},
+    )
+    return JSONResponse(content=json.loads(resp.choices[0].message.content))
+
+
+@app.post("/api/continue_story")
+async def continue_story_post(payload: StoryPayload):
+    import openai
+
+    client = openai.AsyncOpenAI()
+
+    sys_prompt = get_system_prompt_by_level(payload.level)
+    user_prompt = build_user_prompt_story(
+        payload.theme or "",
+        payload.direction,
+        payload.story or "",
+        payload.level,
+        payload.focus,
+        payload.allowed,
+        payload.patterns,
+        payload.max_words or 7,
+        payload.strict_forbid,
+    )
+    resp = await client.chat.completions.create(
+        model="gpt-4o",
+        temperature=1.0,
+        top_p=1.0,
+        max_tokens=300,
+        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
+        response_format={"type": "json_object"},
+    )
+    return JSONResponse(content=json.loads(resp.choices[0].message.content))
+
+
 @app.get("/api/start_story")
 async def start_story(theme: str, level: str):
     """Pre-generate TTS audio for the first story section.
@@ -623,6 +738,7 @@ async def continue_story(
     allowed: str | None = None,
     patterns: str | None = None,
     max_words: int | None = None,
+    strict_forbid: bool = False,
 ):
     """Generate the next story section based on the chosen direction."""
 
@@ -633,16 +749,18 @@ async def continue_story(
     focus_list = focus.split(",") if focus else []
     allowed_list = allowed.split(",") if allowed else []
     patterns_list = patterns.split(",") if patterns else []
-    user_prompt = _build_user_prompt(
+    user_prompt = build_user_prompt_story(
         theme,
         direction,
-        story,
+        story or "",
+        level,
         focus_list,
         allowed_list,
         patterns_list,
-        max_words or 8,
+        max_words or 7,
+        strict_forbid,
     )
-    sys_prompt = SYSTEM_MESSAGE
+    sys_prompt = get_system_prompt_by_level(level)
     if os.environ.get("DEBUG"):
         console.rule("[bold blue]System[/bold blue]")
         console.print(sys_prompt)
