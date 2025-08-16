@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { BookOpen } from 'lucide-react';
 import type { StoryItem } from '@/components/story/SentenceDisplay';
 import { ShimmerText } from '@/components/ShimmerText';
+import { findLevelUnit } from '@/lib/contentConfig';
 
 export default function ContinuePage() {
   const [progress, setProgress] = useState(0);
@@ -13,8 +14,19 @@ export default function ContinuePage() {
   const location = useLocation();
 
   useEffect(() => {
-    const theme = localStorage.getItem('theme');
     const level = localStorage.getItem('level');
+    const unit = localStorage.getItem('unit');
+    if (!level || !unit) {
+      navigate('/');
+      return;
+    }
+    const { unit: cfgUnit } = findLevelUnit(level, unit);
+    if (cfgUnit?.mode === 'words') {
+      navigate(`/session/${level}/${unit}`);
+      return;
+    }
+
+    const theme = localStorage.getItem('theme');
     const direction = localStorage.getItem('direction_choice');
     const idx = Number(localStorage.getItem('direction_index'));
     const focus = localStorage.getItem('focus') ?? '';

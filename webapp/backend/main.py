@@ -172,7 +172,7 @@ def get_system_prompt_by_level(level: str) -> str:
 
 
 def build_allowed_rule(level: str, allowed_list: list[str], strict_forbid: bool) -> str:
-    if strict_forbid or "start" in (level or "").lower():
+    if strict_forbid:
         return (
             "• Gebruik uitsluitend woorden die volledig zijn opgebouwd uit deze letters/klanken: "
             f"[{', '.join(allowed_list)}]. Andere letters/klanken zijn VERBODEN."
@@ -598,7 +598,7 @@ async def generate_words(payload: WordsPayload):
         "Je genereert oefenwoorden voor beginnende lezers.\n"
         "Regels:\n"
         "• Genereer exact 8 decodabele Nederlandse woorden.\n"
-        "• Gebruik uitsluitend de opgegeven letters/klanken (andere zijn VERBODEN).\n"
+        "• Gebruik uitsluitend de opgegeven letters/klanken. Andere zijn VERBODEN.\n"
         "• Eén woord per item. Geen hoofdletters, geen namen. Bij voorkeur één lettergreep.\n\n"
         "Uitvoer (STRICT JSON): { \"words\": [8 strings] }"
     )
@@ -769,7 +769,7 @@ async def continue_story(
 
     resp = await client.chat.completions.create(
         model="gpt-4o",
-        temperature=0.9,
+        temperature=1.0,
         top_p=1.0,
         max_tokens=300,
         messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
